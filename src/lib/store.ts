@@ -119,7 +119,7 @@ export function saveNodeConfig(id:string,input:unknown){
   }
   cleanSig={fallback:sig.fallback,strip:typeof sig.strip==='boolean'?sig.strip:false,cooldown_s:clean(sig.cooldown_s,0,300,10),rules:cleanSigRules,...(Object.keys(cyc).length?{   cycle:{enabled:cyc.enabled,green_s:cyc.green_s??12,yellow_s:cyc.yellow_s??3,red_s:cyc.red_s??10,extend_max_s:cyc.extend_max_s??15,shorten_red:cyc.shorten_red??true}}:{}),...(Object.keys(inter).length?{intersection:{enabled:inter.enabled,green_s:inter.green_s??12,other_green_s:inter.other_green_s??12,yellow_s:inter.yellow_s??3,allred_s:inter.allred_s??2,extend_max_s:inter.extend_max_s??15,lights:inter.lights??4}}:{})};
  }
- const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[],...(cleanSig?{signal:cleanSig}:{}),led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),rules:cleanRules}};
+ const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:(()=>{const seen=new Map();return (Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[]).map(z=>{const o=obj(z),id=typeof o.id==='string'&&o.id?o.id:'zone';const c=(seen.get(id)??0)+1;seen.set(id,c);return {...o,id:c===1?id:id+'-'+(c-1)};});})(),...(cleanSig?{signal:cleanSig}:{}),led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),rules:cleanRules}};
  const d=db();if(!d.prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');
  d.prepare('INSERT OR REPLACE INTO node_config VALUES(?,?,?)').run(id,JSON.stringify(cleanCfg),Date.now());
  const commandID=randomUUID();d.prepare('INSERT INTO commands VALUES(?,?,?,?,?,?)').run(commandID,id,JSON.stringify({cfg:cleanCfg}),'pending',null,Date.now());
