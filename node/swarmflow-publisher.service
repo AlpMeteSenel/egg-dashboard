@@ -1,0 +1,10 @@
+[Unit]
+Description=SWARMFLOW telemetry publisher to the external Turin dashboard
+After=swarmflow-vision.service
+[Service]
+WorkingDirectory=/home/arduino/swarm/shared/TASK-048
+ExecStart=/home/arduino/yolo-env/bin/python /home/arduino/swarm/shared/TASK-048/publisher.py --config /home/arduino/swarm/shared/TASK-048/node-client.json
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=default.target

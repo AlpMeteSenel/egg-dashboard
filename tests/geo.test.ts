@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {align,mercator,lnglat,mapTracks} from '../src/lib/geo';import type {GroundPair,Track} from '../src/lib/types';
+const origin=mercator([7.6869,45.0703]),s=Math.cos(45.0703*Math.PI/180);
+const ll=(x:number,y:number)=>lnglat([origin[0]+x/s,origin[1]+y/s]);
+const pairs:GroundPair[]=[{image:[.2,.2],map:ll(0,0)},{image:[.8,.2],map:ll(10,0)},{image:[.8,.8],map:ll(10,6)},{image:[.2,.8],map:ll(0,6)}];
+test('ground landmarks map the midpoint and extrapolate coherently',()=>{const a=align(pairs),p=a.project([.5,.5])!,expected=ll(5,3);assert.ok(Math.abs(p[0]-expected[0])<1e-8);assert.ok(Math.abs(p[1]-expected[1])<1e-8);const outside=a.project([.95,.5]);assert.ok(outside);assert.ok(outside![0]>ll(10,3)[0]);});
+test('reject collinear/crossed/collapsed landmark sets',()=>{assert.throws(()=>align(pairs.map(p=>({...p,image:[.5,p.image[1]]}))));assert.throws(()=>align([pairs[0],pairs[2],pairs[1],pairs[3]]));assert.throws(()=>align(pairs.map(p=>({...p,map:pairs[0].map}))));});
+test('never invent map coordinates without registration or for stale/unconfirmed tracks',()=>{const track:Track={id:7,cls:'person',conf:.9,box:[.3,.2,.7,.5],speed_kmh:4,confirmed:true,inside:true};assert.equal(mapTracks([track],null).length,0);const placement={lng:7.6869,lat:45.0703,heading:0,pairs};assert.equal(mapTracks([track],placement).length,1);assert.equal(mapTracks([{...track,confirmed:false}],placement).length,0);assert.equal(mapTracks([{...track,last_seen_s:2}],placement).length,0);assert.equal(mapTracks([{...track,cls:'car'}],placement).length,1);assert.equal(mapTracks([{...track,cls:'car',retained:true}],placement).length,0);});

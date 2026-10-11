@@ -1,0 +1,74 @@
+'use client';
+import {useEffect,useRef,useState} from 'react';
+import mapboxgl from 'mapbox-gl';import * as THREE from 'three';
+import {Plus,Minus,LocateFixed,Compass,Box,Map as MapIcon,MapPin} from 'lucide-react';
+import type {NodeRecord,Point,GroundPair} from '@/lib/types';import {TURIN,coverage} from '@/lib/geo';
+import 'mapbox-gl/dist/mapbox-gl.css';
+export type MapMode='browse'|'place'|'align';
+type Props={nodes:NodeRecord[];selected:string;onSelect:(id:string)=>void;mode:MapMode;onPoint:(p:Point)=>void;draft:Point|null;heading:number;pairs:GroundPair[];pendingImage:Point|null;guided:boolean;focusTick:number;demo:boolean};
+export default function CityMap(props:Props){
+ const holder=useRef<HTMLDivElement>(null),mapRef=useRef<mapboxgl.Map|null>(null),markers=useRef<mapboxgl.Marker[]>([]),latest=useRef(props),peopleRef=useRef<THREE.Group|null>(null),originRef=useRef<mapboxgl.MercatorCoordinate|null>(null);latest.current=props;
+ const [error,setError]=useState(''),[ready,setReady]=useState(false),[threeD,setThreeD]=useState(true),[provider,setProvider]=useState('Mapbox');
+ useEffect(()=>{
+  setReady(false);
+  const token=process.env.NEXT_PUBLIC_MAPBOX_TOKEN;if(!token){setError('Add a Mapbox public token to enable the map.');return;}if(!holder.current)return;
+  let cancelled=false;let dispose:undefined|(()=>void);
+  const initialize=async()=>{
+  const config=await fetch('/api/map-config').then(r=>r.json()).catch(()=>({style:'mapbox://styles/mapbox/light-v11',source:'composite',height:'height',base:'min_height',provider:'Mapbox',fallback:false}));
+  if(cancelled||!holder.current)return;setProvider(config.provider);
+  let map:mapboxgl.Map;try{map=new mapboxgl.Map({container:holder.current,accessToken:token,style:config.style,center:TURIN,zoom:15.8,pitch:52,bearing:-18,antialias:true,projection:'mercator',transformRequest:(url)=>url.startsWith('https://tiles.openfreemap.org/')?{url:new URL('/api/map-proxy?url='+encodeURIComponent(url),window.location.origin).href}:{url},maxBounds:[[7.3,44.7],[8.1,45.5]],attributionControl:false});}catch(e){setError(e instanceof Error?e.message:'3D map is unavailable on this device.');return;}
+  mapRef.current=map;map.addControl(new mapboxgl.AttributionControl({compact:true,customAttribution:config.fallback?'© OpenStreetMap · OpenFreeMap':undefined}),'bottom-left');map.addControl(new mapboxgl.ScaleControl({unit:'metric'}),'bottom-right');
+  const scene=new THREE.Scene(),camera=new THREE.Camera(),people=new THREE.Group();scene.add(people);peopleRef.current=people;
+  scene.add(new THREE.AmbientLight(0xffffff,2.4));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(0,-50,100);scene.add(light);
+  let renderer:THREE.WebGLRenderer|null=null;
+  const body=new THREE.CylinderGeometry(.17,.21,.65,10),head=new THREE.SphereGeometry(.17,10,8),leg=new THREE.CylinderGeometry(.065,.065,.66,7),carBody=new THREE.BoxGeometry(1.75,4.2,1.15),carRoof=new THREE.BoxGeometry(1.45,2.1,.55);body.rotateX(Math.PI/2);leg.rotateX(Math.PI/2);
+  const teal=new THREE.MeshStandardMaterial({color:0x067f72,roughness:.85}),estimated=new THREE.MeshStandardMaterial({color:0xd8982f,roughness:.85}),skin=new THREE.MeshStandardMaterial({color:0xf4d5ab,roughness:1}),vehicle=new THREE.MeshStandardMaterial({color:0x243140,roughness:.55}),vehicleGlass=new THREE.MeshStandardMaterial({color:0x8ea4b5,roughness:.25});
+  const layer:mapboxgl.CustomLayerInterface={id:'live-people-3d',type:'custom',renderingMode:'3d',onAdd(_map,gl){renderer=new THREE.WebGLRenderer({canvas:map.getCanvas(),context:gl,antialias:true});renderer.autoClear=false;},render(_gl,matrix){if(!renderer||!originRef.current||!people.children.length)return;const o=originRef.current,s=o.meterInMercatorCoordinateUnits();const local=new THREE.Matrix4().makeTranslation(o.x,o.y,o.z).scale(new THREE.Vector3(s,s,s));camera.projectionMatrix=new THREE.Matrix4().fromArray(matrix).multiply(local);renderer.resetState();renderer.render(scene,camera);},onRemove(){body.dispose();head.dispose();leg.dispose();carBody.dispose();carRoof.dispose();teal.dispose();estimated.dispose();skin.dispose();vehicle.dispose();vehicleGlass.dispose();renderer?.dispose();}};
+  // Reuse geometry/materials while fresh anonymous detections arrive.
+  (people as THREE.Group & {refresh?:(n:NodeRecord[],demo:boolean)=>void}).refresh=(nodes,demo)=>{
+   people.clear();const base=nodes.find(n=>n.placement)?.placement;originRef.current=mapboxgl.MercatorCoordinate.fromLngLat(base?[base.lng,base.lat]:TURIN,0);const o=originRef.current,s=o.meterInMercatorCoordinateUnits();
+   const points=nodes.flatMap(n=>n.mapped);if(demo){for(let i=0;i<6;i++)points.push({id:900+i,cls:'person',conf:1,box:[0,0,1,1],speed_kmh:4,confirmed:true,inside:false,lng:TURIN[0]+.00005*(i-3),lat:TURIN[1]+.00006,extrapolated:false});}
+   for(const p of points){const pos=mapboxgl.MercatorCoordinate.fromLngLat([p.lng,p.lat]);const actor=new THREE.Group();actor.position.set((pos.x-o.x)/s,(pos.y-o.y)/s,0);const mat=p.extrapolated?estimated:p.cls==='person'?teal:vehicle;
+    if(p.cls==='person'){const torso=new THREE.Mesh(body,mat);torso.position.z=1.08;actor.add(torso);const h=new THREE.Mesh(head,skin);h.position.z=1.6;actor.add(h);for(const side of [-1,1]){const l=new THREE.Mesh(leg,mat);l.position.set(side*.085,0,.35);actor.add(l);}}
+    else{const heading=nodes.find(n=>n.mapped.includes(p))?.placement?.heading??0;actor.rotation.z=Math.PI+heading*Math.PI/180;const scale=p.cls==='bus'||p.cls==='truck'?1.4:p.cls==='bicycle'||p.cls==='motorcycle'?0.62:1;actor.scale.setScalar(scale);const hull=new THREE.Mesh(carBody,mat);hull.position.z=.58;actor.add(hull);const roof=new THREE.Mesh(carRoof,p.extrapolated?estimated:vehicleGlass);roof.position.set(0,-.15,1.25);actor.add(roof);}
+    people.add(actor);}
+  };
+  map.on('load',()=>{
+   if(mapRef.current!==map)return;
+   const label=map.getStyle().layers?.find(l=>l.type==='symbol'&&l.layout&&'text-field' in l.layout)?.id;
+   map.addLayer({id:'city-buildings-3d',source:config.source,'source-layer':'building',type:'fill-extrusion',minzoom:15,paint:{'fill-extrusion-color':'#d6d8cf','fill-extrusion-height':['coalesce',['get',config.height],4],'fill-extrusion-base':['coalesce',['get',config.base],0],'fill-extrusion-opacity':.8}},label);
+   map.addSource('coverage',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'coverage-fill',source:'coverage',type:'fill',paint:{'fill-color':'#169c86','fill-opacity':.12}});map.addLayer({id:'coverage-line',source:'coverage',type:'line',paint:{'line-color':'#179980','line-width':1.5,'line-opacity':.55}});
+   map.addSource('people',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'people-footprints',source:'people',type:'circle',paint:{'circle-radius':5,'circle-color':['case',['get','extrapolated'],'#dfaa44',['==',['get','cls'],'person'],'#128d79','#243140'],'circle-stroke-color':'#ffffff','circle-stroke-width':1.8}});map.addLayer({id:'people-labels',source:'people',type:'symbol',layout:{'text-field':['concat','#',['to-string',['get','id']]],'text-size':11,'text-offset':[0,1.5],'text-anchor':'top','text-allow-overlap':false},paint:{'text-color':'#126254','text-halo-color':'#fff','text-halo-width':2}});
+   map.addLayer(layer);setReady(true);setError('');
+  });
+  map.on('click',e=>{const p=latest.current;if(p.mode!=='browse'){p.onPoint([e.lngLat.lng,e.lngLat.lat]);return;}const features=map.queryRenderedFeatures(e.point,{layers:map.getLayer('people-footprints')?['people-footprints']:[]});if(features.length){const f=features[0],attrs=(f as unknown as {properties?:Record<string,unknown>}).properties||{},kind=attrs.cls==='person'?'Person':String(attrs.cls||'Detection'),el=document.createElement('div');el.className='map-tooltip';el.textContent=attrs.demo?'Simulated person · 3D preview':`${attrs.node_name} · ${kind} #${attrs.id} · ${Math.round(Number(attrs.conf)*100)}% detection confidence · ${attrs.extrapolated?'extrapolated position':'ground-aligned estimate'}`;new mapboxgl.Popup({offset:12}).setLngLat(e.lngLat).setDOMContent(el).addTo(map);}});
+  map.on('error',e=>{const msg=e.error.message;if(/401|403|token|access/i.test(msg))setError('Map data access was denied. Camera data is still available.');else if(/Failed to fetch|fetch failed|502/i.test(msg))setError('Map data could not load. Check the network connection.');});
+  const resize=new ResizeObserver(()=>map.resize());resize.observe(holder.current);
+  dispose=()=>{resize.disconnect();markers.current.forEach(m=>m.remove());map.remove();mapRef.current=null;};
+  };initialize().catch(()=>setError('The map could not load. Your camera data remains available.'));
+  return()=>{cancelled=true;dispose?.();};
+ },[]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const coverageSource=map.getSource('coverage') as mapboxgl.GeoJSONSource|undefined,peopleSource=map.getSource('people') as mapboxgl.GeoJSONSource|undefined;if(!coverageSource||!peopleSource)return;
+  markers.current.forEach(m=>m.remove());markers.current=[];
+  for(const n of props.nodes){if(!n.placement)continue;const el=document.createElement('button');el.className='camera-pin'+(n.id===props.selected?' selected':'')+(n.online?'':' offline');el.setAttribute('aria-label','Select '+n.name);el.innerHTML='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>';el.addEventListener('click',e=>{e.stopPropagation();latest.current.onSelect(n.id);});markers.current.push(new mapboxgl.Marker({element:el}).setLngLat([n.placement.lng,n.placement.lat]).addTo(map));}
+  const append=(p:Point,text:string,cls:string)=>{const el=document.createElement('div');el.className=cls;el.textContent=text;markers.current.push(new mapboxgl.Marker({element:el}).setLngLat(p).addTo(map));};
+  if(props.draft)append(props.draft,'⌖','draft-pin');for(let i=0;i<props.pairs.length;i++)append(props.pairs[i].map,String.fromCharCode(65+i),'landmark-pin');
+  const areas=props.nodes.filter(n=>n.placement).map(n=>({type:'Feature' as const,properties:{},geometry:{type:'Polygon' as const,coordinates:[coverage(n.placement!)]}}));if(props.draft)areas.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[coverage({lng:props.draft[0],lat:props.draft[1],heading:props.heading,pairs:[]})]}});
+  coverageSource.setData({type:'FeatureCollection',features:areas});
+  const points=props.nodes.flatMap(n=>n.mapped.map(t=>({type:'Feature' as const,properties:{id:t.id,cls:t.cls,conf:t.conf,extrapolated:t.extrapolated,demo:false,node_name:n.name},geometry:{type:'Point' as const,coordinates:[t.lng,t.lat]}})));
+  if(props.demo){for(let i=0;i<6;i++)points.push({type:'Feature',properties:{id:900+i,cls:'person',conf:1,extrapolated:false,demo:true,node_name:'Preview'},geometry:{type:'Point',coordinates:[TURIN[0]+.00005*(i-3),TURIN[1]+.00006]}});}
+  peopleSource.setData({type:'FeatureCollection',features:points});
+  (peopleRef.current as THREE.Group&{refresh?:(n:NodeRecord[],demo:boolean)=>void})?.refresh?.(props.nodes,props.demo);map.getCanvas().style.cursor=props.mode==='browse'?'': 'crosshair';map.triggerRepaint();
+ },[props.nodes,props.selected,props.mode,props.draft,props.heading,props.pairs,props.demo,ready]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const n=latest.current.nodes.find(n=>n.id===latest.current.selected);if(n?.placement)map.flyTo({center:[n.placement.lng,n.placement.lat],zoom:18.5,duration:1100});else if(latest.current.focusTick)map.flyTo({center:TURIN,zoom:16.4,duration:1000});},[props.selected,props.focusTick,ready]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;if(props.demo){map.flyTo({center:TURIN,zoom:20,pitch:55,duration:1100});setThreeD(true);if(map.getLayer('city-buildings-3d'))map.setLayoutProperty('city-buildings-3d','visibility','visible');}},[props.demo,ready]);
+ const toggle3D=()=>{const map=mapRef.current;if(!map||!map.getLayer('city-buildings-3d'))return;setThreeD(!threeD);map.easeTo({pitch:threeD?0:55,duration:700});map.setLayoutProperty('city-buildings-3d','visibility',threeD?'none':'visible');};
+ return <div className={'city-map '+(props.mode!=='browse'?'mapping':'')}><div ref={holder} className="map-canvas"/>{error&&<div className="map-error"><MapPin size={30}/><strong>Map unavailable</strong><p>{error}</p><span>Your camera data is still available in the panel.</span></div>}
+ <div className="map-topline"><span className="map-city"><span className="live-dot"/>TORINO, ITALIA</span><span className="map-viewlabel">{props.demo?'SIMULATED PEOPLE · PREVIEW':threeD?'3D street view':'2D street view'}</span></div>
+ {props.demo&&<div className="preview-banner">SIMULATED PEOPLE · NOT LIVE DATA</div>}
+ {props.mode!=='browse'&&<div className="map-instruction"><MapPin size={16}/>{props.mode==='place'?'Click the map where this camera is installed':props.guided?`Click pavement corner ${String.fromCharCode(65+props.pairs.length)} on the map`:props.pendingImage?'Now click the same landmark on the map':'Choose a ground landmark in the camera view first'}</div>}
+ <div className="map-buttons"><button title="Zoom in" aria-label="Zoom in" onClick={()=>mapRef.current?.zoomIn()}><Plus size={19}/></button><button title="Zoom out" aria-label="Zoom out" onClick={()=>mapRef.current?.zoomOut()}><Minus size={19}/></button><i/><button title="Face north" aria-label="Face north" onClick={()=>mapRef.current?.easeTo({bearing:0})}><Compass size={19}/></button><button title="Locate camera" aria-label="Locate camera" onClick={()=>{const n=props.nodes.find(n=>n.id===props.selected);mapRef.current?.flyTo({center:n?.placement?[n.placement.lng,n.placement.lat]:TURIN,zoom:n?.placement?19:16.3});}}><LocateFixed size={19}/></button><button className={threeD?'active':''} title={threeD?'Switch to 2D':'Switch to 3D'} aria-label={threeD?'Switch to 2D':'Switch to 3D'} onClick={toggle3D}>{threeD?<Box size={19}/>:<MapIcon size={19}/>}</button></div>
+ {provider!=='Mapbox'&&<div className="map-provider-note">Open map fallback · Mapbox tiles unavailable</div>}
+ <div className="map-legend"><span><b className="legend-dot mint"/>Camera</span><span><b className="legend-dot blue"/>Person</span><span><b className="legend-dot ink"/>Vehicle</span><span><b className="legend-dot amber"/>Extrapolated</span></div>
+ </div>;
+}
