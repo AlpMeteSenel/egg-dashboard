@@ -19,8 +19,11 @@ test('camera settings persist, validate and queue as one node command',()=>{
  assert.throws(()=>saveNodeConfig('egg',{cfg:{...cfg,led:{...cfg.led,rules:[{name:'evil',when:'__import__("os").system("rm -rf /")',led:'calm',on_s:0,off_s:0,priority:0}]}}}));
  assert.throws(()=>saveNodeConfig('egg',{cfg:{...cfg,led:{...cfg.led,fallback:'ghost'}}}));
  assert.throws(()=>saveNodeConfig('ghost',{cfg}));assert.equal(nodeConfig('ghost').cfg,null);});
-test('traffic light settings ride the camera config',()=>{const base={fps:1,quality:50,size:'vga',zones:[],led:{presets:{calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',cooldown_s:10,traffic:{enabled:true,green_s:30,yellow_s:4,red_s:20,extend_max_s:20},rules:[{name:'idle',when:'true',led:'calm',on_s:0,off_s:0,priority:0}]}};
- const s=saveNodeConfig('egg',{cfg:base});
- assert.deepEqual((s.cfg.led as Record<string,unknown>).traffic,{enabled:true,green_s:30,yellow_s:4,red_s:20,extend_max_s:20});
- assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,led:{...base.led,traffic:{enabled:true,green_s:500}}}}));});
-test.after(()=>{rmSync(dir,{recursive:true,force:true});});
+ test('signal system validates separately from the strip rules',()=>{const base={fps:1,quality:50,size:'vga',zones:[],led:{presets:{calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',cooldown_s:10,rules:[{name:'idle',when:'true',led:'calm',on_s:0,off_s:0,priority:0}]},signal:{fallback:'red',cooldown_s:10,cycle:{enabled:true,green_s:8,yellow_s:2,red_s:6,extend_max_s:10},rules:[{name:'walk',when:'crossing_active == 1',led:'green',on_s:0,off_s:3,priority:9}]}};
+  const s=saveNodeConfig('egg',{cfg:base}) as {cfg:Record<string,unknown>};
+  const sig=s.cfg.signal as {fallback:string;rules:unknown[];cycle:Record<string,unknown>};
+  assert.equal(sig.fallback,'red');assert.equal(sig.rules.length,1);assert.equal(sig.cycle.enabled,true);
+  assert.equal((s.cfg.led as {rules:unknown[]}).rules.length,1);
+  assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,fallback:'purple'}}}));
+  assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,cycle:{...base.signal.cycle,green_s:500}}}}));});
+ test.after(()=>{rmSync(dir,{recursive:true,force:true});});
