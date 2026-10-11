@@ -92,7 +92,7 @@ export function saveNodeConfig(id:string,input:unknown){
  if(cfg.size!=='vga'&&cfg.size!=='qvga')throw Error('Choose VGA or QVGA resolution.');
  const led=obj(cfg.led),presets=obj(led.presets),names=Object.keys(presets);
  if(!names.length||names.length>8)throw Error('Define between one and eight light presets.');
- for(const n of names){const pr=obj(presets[n]);if(!Number.isInteger(pr.mode)||Number(pr.mode)<0||Number(pr.mode)>21)throw Error('Preset '+n+' needs a light effect from 0 to 21.');if(!Number.isFinite(pr.brightness)||Number(pr.brightness)<0||Number(pr.brightness)>100)throw Error('Preset '+n+' brightness must be between 0 and 100.');if(!Number.isFinite(pr.for_s)||Number(pr.for_s)<0||Number(pr.for_s)>600)throw Error('Preset '+n+' minimum time must be 0 to 600 seconds.');}
+ for(const n of names){const pr=obj(presets[n]);if(pr.traffic!==undefined){if(pr.traffic!=='red'&&pr.traffic!=='yellow'&&pr.traffic!=='green')throw Error('Preset '+n+' signal must be red, yellow or green.');}else{if(!Number.isInteger(pr.mode)||Number(pr.mode)<0||Number(pr.mode)>21)throw Error('Preset '+n+' needs a light effect from 0 to 21.');if(!Number.isFinite(pr.brightness)||Number(pr.brightness)<0||Number(pr.brightness)>100)throw Error('Preset '+n+' brightness must be between 0 and 100.');if(!Number.isFinite(pr.for_s)||Number(pr.for_s)<0||Number(pr.for_s)>600)throw Error('Preset '+n+' minimum time must be 0 to 600 seconds.');}}
  if(typeof led.fallback!=='string'||!presets[led.fallback])throw Error('Choose the preset shown when nothing is triggered.');
  const tr=obj(led.traffic);
  if(Object.keys(tr).length){

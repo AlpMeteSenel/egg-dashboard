@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {Check,ChevronDown,Plus,Settings2,X} from 'lucide-react';
 import type {NodeRecord} from '@/lib/types';
-type Preset={mode:number;brightness:number;for_s:number};
+type Preset={mode?:number;brightness?:number;for_s?:number;traffic?:string};
 type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s:number;off_s:number;priority:number;raw:string|null};
 type CfgDoc={fps:number;quality:number;size:string;zones:unknown[];led:{presets:Record<string,Preset>;fallback:string;cooldown_s:number;traffic?:Traffic;rules:RuleDraft[]}};
 type Traffic={enabled:boolean;green_s:number;yellow_s:number;red_s:number;extend_max_s:number};
@@ -64,9 +64,11 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    <span className="eyebrow">LIGHT PRESETS</span>
    {Object.entries(cfg.led.presets).map(([n,p])=><div className="cfg-row" key={n}>
     <strong className="preset-name">{n}</strong>
-    <select aria-label={'Effect for '+n} value={p.mode} onChange={e=>setPreset(n,{mode:Number(e.target.value)})}>{MODES.map(([m,l])=><option key={m} value={m}>{l}</option>)}</select>
-    <label className="cfg-level">Level<input type="range" min={0} max={100} value={p.brightness} onChange={e=>setPreset(n,{brightness:Number(e.target.value)})}/><output>{p.brightness}%</output></label>
-    <label className="cfg-mini">Hold s<input type="number" min={0} max={600} value={p.for_s} onChange={e=>setPreset(n,{for_s:Number(e.target.value)})}/></label>
+    <select aria-label={'Kind of '+n} value={p.traffic??'strip'} onChange={e=>{const v=e.target.value;setLed({presets:Object.fromEntries(Object.entries(cfg.led.presets).map(([k,v2])=>[k,k===n?(v==='strip'?{mode:12,brightness:80,for_s:5}:{traffic:v}):v2]))});}}><option value="strip">Strip effect</option><option value="red">Signal: red</option><option value="yellow">Signal: yellow</option><option value="green">Signal: green</option></select>
+    {p.traffic?null:<>
+     <select aria-label={'Effect for '+n} value={p.mode??12} onChange={e=>setPreset(n,{mode:Number(e.target.value)})}>{MODES.map(([m,l])=><option key={m} value={m}>{l}</option>)}</select>
+     <label className="cfg-level">Level<input type="range" min={0} max={100} value={p.brightness??70} onChange={e=>setPreset(n,{brightness:Number(e.target.value)})}/><output>{p.brightness??70}%</output></label>
+     <label className="cfg-mini">Hold s<input type="number" min={0} max={600} value={p.for_s??0} onChange={e=>setPreset(n,{for_s:Number(e.target.value)})}/></label></>}
     <button className="cfg-del" aria-label={'Remove preset '+n} disabled={cfg.led.fallback===n||cfg.led.rules.some(r=>r.led===n)} onClick={()=>removePreset(n)}><X size={14}/></button>
    </div>)}
    <div className="cfg-add"><input placeholder="new preset name" value={newName} onChange={e=>setNewName(e.target.value)}/><button className="quiet" disabled={!/^[a-z0-9-]{2,20}$/.test(newName)||!!cfg.led.presets[newName]} onClick={()=>{setLed({presets:{...cfg.led.presets,[newName]:{mode:11,brightness:70,for_s:5}}});setNewName('');}}><Plus size={14}/>Add preset</button></div>
