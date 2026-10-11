@@ -9,6 +9,6 @@ test('only explicitly placed signals on a real controller appear; no camera fall
 });
 test('four placed lights use their own reported phase, opposite pairs match and stale lights turn dark',()=>{
  const n=node('egg',[[7.66,45.0601],[7.6601,45.06],[7.66,45.0599],[7.6599,45.06]]);
- assert.deepEqual(mapSignals([n]).map(s=>s.phase),['red','green','red','green']);assert.ok(Math.abs(mapSignals([n])[0].heading)<.1);
+ assert.deepEqual(mapSignals([n]).map(s=>s.phase),['red','green','red','green']);assert.deepEqual(mapSignals([n]).map(s=>s.countdown),[null,20,null,20]);assert.ok(Math.abs(mapSignals([n])[0].heading)<.1);
  n.fresh=false;assert.ok(mapSignals([n]).every(s=>s.phase==='unknown'&&s.countdown===null));
 });

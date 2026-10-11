@@ -114,11 +114,12 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
     <label>Idle color<select aria-label="Idle signal color" value={cfg.signal.fallback} onChange={e=>setSig({fallback:e.target.value})}>{COLORS.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal.cycle.enabled} onChange={e=>setSig({cycle:{...cfg.signal.cycle,enabled:e.target.checked}})}/>Timed cycle</label>
     <label className="cfg-check"><input type="checkbox" checked={!!cfg.signal.inter?.enabled} onChange={e=>setSig({inter:e.target.checked?cfg.signal.inter??{enabled:true,green_s:12,other_green_s:290,yellow_s:3,allred_s:2,extend_max_s:10,lights:4}:{...(cfg.signal.inter as Inter),enabled:false}})}/>Cross intersection · opposite lights share green</label>
-    {cfg.signal.inter?.enabled&&<label className="cfg-mini">other road green s<input type="number" min={1} max={600} value={cfg.signal.inter.other_green_s} onChange={e=>setSig({inter:{...cfg.signal.inter!,other_green_s:Number(e.target.value)}})}/></label>}
+    {cfg.signal.inter?.enabled&&<label className="cfg-mini">other road base green s<input type="number" min={1} max={600} value={cfg.signal.inter.other_green_s} onChange={e=>setSig({inter:{...cfg.signal.inter!,other_green_s:Number(e.target.value)}})}/></label>}
     <label className="cfg-mini">green s<input type="number" min={1} max={600} value={cfg.signal.cycle.green_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,green_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">yellow s<input type="number" min={1} max={30} value={cfg.signal.cycle.yellow_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,yellow_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">red s<input type="number" min={1} max={600} value={cfg.signal.cycle.red_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,red_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">max extend s<input type="number" min={0} max={60} value={cfg.signal.cycle.extend_max_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,extend_max_s:Number(e.target.value)}})}/></label>
+    {cfg.signal.inter?.enabled&&<p className="cfg-help">These are base green times. A vehicle request can end the other road’s green after 5 seconds; an occupied crossing can extend it up to the extension cap.</p>}
    <span className="eyebrow">SIGNAL RULES · OVERRIDE THE CYCLE AND THE IDLE COLOR</span>
    {cfg.signal.rules.map((r,i)=>{const m=METRICS.find(x=>x.id===(r.raw?'':r.metric));return <div className="cfg-row cfg-rule" key={i}>
     {r.raw?<code className="cfg-raw">{r.raw}</code>:<>

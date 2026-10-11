@@ -8,6 +8,6 @@ export function mapSignals(nodes:NodeRecord[]):MapSignal[]{return nodes.flatMap(
   const f=node.fresh?(node.telemetry?.vision.traffic_lights?.[index]||(index===0?node.telemetry?.vision.traffic:undefined)):undefined;
   const phase:MapSignal['phase']=f?.[0]?'red':f?.[1]?'amber':f?.[2]?'green':'unknown';
   const heading=(Math.atan2((point[0]-center[0])*Math.cos(center[1]*Math.PI/180),point[1]-center[1])*180/Math.PI+360)%360;
-  return {id:node.id+'-'+index,node:node.id,name:node.name,index,point,heading,phase,countdown:node.fresh&&typeof node.telemetry?.vision.countdown==='number'?Math.max(0,Math.ceil(node.telemetry.vision.countdown)):null};
+  return {id:node.id+'-'+index,node:node.id,name:node.name,index,point,heading,phase,countdown:node.fresh&&(phase==='green'||phase==='amber')&&typeof node.telemetry?.vision.countdown==='number'?Math.max(0,Math.ceil(node.telemetry.vision.countdown)):null};
  });
 });}
