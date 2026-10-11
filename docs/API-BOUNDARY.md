@@ -83,6 +83,11 @@ Validates (`fps` 0–15, `quality` 5–95, `size` in `vga|qvga`, schema-checked 
 ESP32 nodes GET `/cfg/<id>` from their worker each 30s; apply if `hash` differs from NVS-stored applied hash; report applied `cfg_hash`/`cfg_v` in the next `sensor` record. Sync state per node = `desired.hash == reported.hash` (no extra endpoint).
 
 ## 3. LED rule engine (config payload, peer-evaluated)
+
+### Traffic light (optional `cfg.led.traffic`)
+`{"enabled": bool, "green_s": 1-120, "yellow_s": 1-30, "red_s": 1-120, "extend_max_s": 0-60}`.
+When enabled the peer's uplink runs a red→green→yellow cycle: green stretches second-by-second while the crossing zone is occupied (capped at `green_s+extend_max_s`), red shortens toward a 1s floor while the street is clear, yellow is fixed. The phase is applied to the MCU as solid colors via the integrated app's `ws://127.0.0.1:8091/ws` (`{"led":[r,g,b]}`; red 255,0,0 · yellow 255,170,0 · green 0,255,0). Disabling restores `auto_led=true` and clears the strip. Dashboard UI: Camera settings → Traffic light (timings + live phase pill).
+`cfg` commands are routed by the publisher to the peer's `cfg_endpoint` (`GET/POST /cfg/<node>` on egg :9011, worker :9010) instead of the node's `/api/config`.
 `cfg.led` shape:
 ```json
 {"presets": {"alert": {"mode":3,"brightness":95,"for_s":8}, "quiet": {"mode":21,"brightness":18}},
