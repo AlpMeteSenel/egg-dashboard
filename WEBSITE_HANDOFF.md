@@ -394,3 +394,16 @@ Next IntersectionRisk:0–100 prototype activity heuristic, explained factors,
 short count hold, stale unknown. map logical dashed links between UNO/ESP pins and
 UNO/intersection centroid, animated only for online endpoints; labelled illustrative.
 Map toolbar View connected modules fits both locations. No actual mesh route claim.
+
+## Manual threat-score fallback and recording view
+
+ThreatFallback at page bottom controls browser-session-only displayed risk0–100.
+Default is automatic; manual mode always displays Manual and keeps automatic
+estimate/live observations distinct. It never changes node control or telemetry.
+Hide controls for recording conditionally removes the panel and scrolls to overview;
+Esc restores, Shift+R toggles outside input fields. No reliable external macOS recorder
+hook exists, so user must enter recording view before recording. No recording API,
+permissions, media storage, or video export added. Typecheck/build passed; browser
+verified85/100, Manual provenance, panel absent in recording view, Esc restoration,
+then restored automatic mode and candidate50. Source lives in components/ThreatFallback,
+Dashboard and IntersectionRisk. Server remains on localhost3000.

@@ -132,3 +132,11 @@ Confirmed fresh counts use a2s peak hold; unconfirmed/retained tracks and cumula
 passage counters cannot request green. Pedestrian priority uses a drawn crossing
 when available, otherwise full-view presence. The two-car rule uses full-view
 vehicle count until a vehicle zone is configured. Yellow/all-red timings retained.
+
+Manual threat fallback lives at the bottom of the page: enable **Use manual score**
+and choose0–100. The displayed card keeps a Manual badge and its separate automatic
+estimate; camera data and light control are unaffected. Selection persists in this
+browser tab for the session. **Hide controls for recording** removes the bottom
+panel, preserving the score/provenance; Esc restores it, Shift+R toggles the view.
+External OS screen recording cannot be detected automatically; enable recording
+view before starting the screen recorder. The dashboard does not start recording.
