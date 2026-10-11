@@ -109,9 +109,9 @@ export function saveNodeConfig(id:string,input:unknown){
   if(Object.keys(cyc).length){
    if(typeof cyc.enabled!=='boolean')throw Error('The signal cycle needs a true or false switch.');
    const tc=(k:string,lo:number,hi:number)=>{if(cyc[k]!==undefined&&(!Number.isInteger(cyc[k])||Number(cyc[k])<lo||Number(cyc[k])>hi))throw Error('Signal cycle '+k+' must be '+lo+'-'+hi+' seconds.');};
-   tc('green_s',1,120);tc('yellow_s',1,30);tc('red_s',1,120);tc('extend_max_s',0,60);
+   tc('green_s',1,600);tc('yellow_s',1,30);tc('red_s',1,600);tc('extend_max_s',0,60);
   }
-  cleanSig={fallback:sig.fallback,cooldown_s:clean(sig.cooldown_s,0,300,10),rules:cleanSigRules,...(Object.keys(cyc).length?{cycle:{enabled:cyc.enabled,green_s:cyc.green_s??12,yellow_s:cyc.yellow_s??3,red_s:cyc.red_s??10,extend_max_s:cyc.extend_max_s??15}}:{})};
+  cleanSig={fallback:sig.fallback,strip:typeof sig.strip==='boolean'?sig.strip:false,cooldown_s:clean(sig.cooldown_s,0,300,10),rules:cleanSigRules,...(Object.keys(cyc).length?{   cycle:{enabled:cyc.enabled,green_s:cyc.green_s??12,yellow_s:cyc.yellow_s??3,red_s:cyc.red_s??10,extend_max_s:cyc.extend_max_s??15,shorten_red:cyc.shorten_red??true}}:{})};
  }
  const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[],...(cleanSig?{signal:cleanSig}:{}),led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),rules:cleanRules}};
  const d=db();if(!d.prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');

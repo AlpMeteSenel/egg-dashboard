@@ -25,5 +25,5 @@ test('camera settings persist, validate and queue as one node command',()=>{
   assert.equal(sig.fallback,'red');assert.equal(sig.rules.length,1);assert.equal(sig.cycle.enabled,true);
   assert.equal((s.cfg.led as {rules:unknown[]}).rules.length,1);
   assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,fallback:'purple'}}}));
-  assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,cycle:{...base.signal.cycle,green_s:500}}}}));});
+  assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,cycle:{...base.signal.cycle,green_s:700}}}}));});
  test.after(()=>{rmSync(dir,{recursive:true,force:true});});
