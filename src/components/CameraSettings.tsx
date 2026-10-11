@@ -7,7 +7,7 @@ type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s
 type CfgDoc={fps:number;quality:number;size:string;zones:unknown[];led:{presets:Record<string,Preset>;fallback:string;cooldown_s:number;traffic?:Traffic;rules:RuleDraft[]}};
 type Traffic={enabled:boolean;green_s:number;yellow_s:number;red_s:number;extend_max_s:number};
 const DEFAULT_TRAFFIC:Traffic={enabled:false,green_s:12,yellow_s:3,red_s:10,extend_max_s:15};
-const phaseOf=(node?:NodeRecord)=>{const c=node?.telemetry?.vision?.led_command;if(!c)return null;const a=c.args[0] as unknown;if(c.method==='set_led'&&Array.isArray(a)){const[r,g,b]=a as number[];if(r>200&&g<60)return 'red';if(r>200&&g>120)return 'yellow';if(g>200)return 'green';if(!r&&!g&&!b)return 'off';}return null;};
+const phaseOf=(node?:NodeRecord)=>{const t=node?.telemetry?.vision?.traffic;if(t&&t.some(v=>v>0))return t[0]>0?'red':t[1]>0?'yellow':t[2]>0?'green':null;if(t)return 'off';const c=node?.telemetry?.vision?.led_command;if(!c)return null;const a=c.args[0] as unknown;if(c.method==='set_led'&&Array.isArray(a)){const[r,g,b]=a as number[];if(r>200&&g<60)return 'red';if(r>200&&g>120)return 'yellow';if(g>200)return 'green';if(!r&&!g&&!b)return 'off';}return null;};
 const MODES:[number,string][]=[[1,'Rainbow ambient'],[2,'Breathing'],[3,'Scanning light'],[6,'Lights off'],[7,'Solid red'],[8,'Solid green'],[9,'Solid blue'],[11,'Crossing warning'],[12,'Red alert sweep'],[13,'Hazard flash'],[14,'Siren'],[15,'Crossing wave'],[16,'Flow left'],[17,'Flow right'],[18,'Comet trail'],[19,'Theatre chase'],[20,'Heartbeat'],[21,'Bus-stop beacon']];
 const METRICS:{id:string;label:string;kind:'always'|'bool'|'num';value:number}[]=[
  {id:'true',label:'Always (idle state)',kind:'always',value:0},
