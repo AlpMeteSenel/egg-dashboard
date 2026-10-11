@@ -83,7 +83,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    <span className="eyebrow">STRIP RULES · CHECKED EVERY SECOND, HIGHEST PRIORITY WINS</span>
    {cfg.led.rules.map((r,i)=>{const m=METRICS.find(x=>x.id===(r.raw?'':r.metric));return <div className="cfg-row cfg-rule" key={i}>
     {r.raw?<code className="cfg-raw">{r.raw}</code>:<>
-     <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setRule(i,{metric:nm.id,op:nm.kind==='num'?'':'',value:nm.value});}}>{METRICS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
+     <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setRule(i,{metric:nm.id,op:nm.kind==='num'?'>=':'',value:nm.value});}}>{METRICS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
      {zonePick(r,set=>setRule(i,set))}
       {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
      {m?.kind==='num'&&<input className="cfg-val" type="number" aria-label="Value" value={r.value} onChange={e=>setRule(i,{value:Number(e.target.value)})}/>}
@@ -118,7 +118,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    <span className="eyebrow">SIGNAL RULES · OVERRIDE THE CYCLE AND THE IDLE COLOR</span>
    {cfg.signal.rules.map((r,i)=>{const m=METRICS.find(x=>x.id===(r.raw?'':r.metric));return <div className="cfg-row cfg-rule" key={i}>
     {r.raw?<code className="cfg-raw">{r.raw}</code>:<>
-     <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setSigRule(i,{metric:nm.id,op:nm.kind==='num'?'':'',value:nm.value});}}>{METRICS.filter(x=>x.kind!=='always').map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
+     <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setSigRule(i,{metric:nm.id,op:nm.kind==='num'?'>=':'',value:nm.value});}}>{METRICS.filter(x=>x.kind!=='always').map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
      {zonePick(r,set=>setSigRule(i,set))}
       {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setSigRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
      {m?.kind==='num'&&<input className="cfg-val" type="number" aria-label="Value" value={r.value} onChange={e=>setSigRule(i,{value:Number(e.target.value)})}/>}
