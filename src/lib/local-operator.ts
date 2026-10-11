@@ -1,0 +1,1 @@
+export function localOperator(req:Request){const u=new URL(req.url),host=req.headers.get('host')||'';return /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)&&['localhost','127.0.0.1'].includes(u.hostname)&&req.headers.get('sec-fetch-site')!=='cross-site'&&(!req.headers.get('origin')||req.headers.get('origin')===u.origin);}

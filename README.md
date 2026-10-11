@@ -140,3 +140,21 @@ browser tab for the session. **Hide controls for recording** removes the bottom
 panel, preserving the score/provenance; Esc restores it, Shift+R toggles the view.
 External OS screen recording cannot be detected automatically; enable recording
 view before starting the screen recorder. The dashboard does not start recording.
+
+### Possible collision warnings and voice calls
+
+The bottom **Possible collision alerts** panel enables detection on Egg separately from real calling. Both are off on first use. Confirmed, non-retained person/car boxes at >=50% detector confidence must overlap by 25% of the person's box over at least three distinct fresh captures spanning 0.5 seconds. Thresholds and the spoken location are editable. Occlusion can satisfy this rule: these are **possible collisions requiring human verification**, not confirmed crashes. Camera/model confidence is not collision probability. The node-wide two-minute warning cooldown prevents repeated triggers after ID changes. A speed gate above zero requires an available calibrated car-speed estimate. With a zero gate, missing speeds are explicitly unknown.
+
+The warning stores individual prototype speed estimates and the possible relative-speed range `abs(car-person)` to `car+person`. Without reliable direction vectors this is not an exact impact speed. No speed is synthesized from pixels. The Italian phone message explicitly says possible collision, estimated speeds and human verification; simulated warnings say TEST. Existing crosswalk lights, bus-stop monitoring and camera settings are unchanged.
+
+Voice integration reuses the separate local `/Users/alpme/Projects/fish-call` application via fixed loopback port3001. Credentials and the authorized recipient remain in that project's private `.env`; they are neither copied nor accepted in dashboard requests. To run it: `PORT=3001 node server.js --ngrok` from that directory, with Node22+. Its signed HTTPS audio/TwiML routes and authenticated callbacks are public; its control routes remain private. The Next dashboard is not exposed through that tunnel. For setup see the source application's README.
+
+1. Enable detection and save the actual spoken location.
+2. **Create test warning · no call** validates the saved warning and fictional example speeds without provider requests.
+3. **Generate voice preview · no call** uses Fish Audio and can consume its credits. Listen in the dashboard.
+4. Check the masked recipient, accept real calls/provider charges, then explicitly enable automatic Twilio calls. Arming expires in ten minutes and is lost on Next server restart.
+5. For a test telephone call, press **Call configured recipient** and confirm the browser prompt. The agent does not place test calls.
+
+Automatic calls require both switches on, wait five seconds, and recheck the arm session after speech generation. Disarming or canceling preparation blocks calls not yet submitted. One in-flight call plus a two-minute call cooldown prevents duplication. Each attempt is journaled before the provider POST; ambiguous outcomes stay held, and the Fish app additionally persists its own Twilio safety journal/active-call checks. No automatic retries are made. A submitted call cannot be recalled by the dashboard cancel button. Incidents and detection settings persist in ignored `.data/crashes.sqlite`; the warning is also added to existing event history.
+
+**Hide controls for recording**, or Shift+R, removes the bottom controls. Esc restores them. This is an explicit recording view, not OS recording detection. Saved warnings remain visible; hiding controls does not disarm calls. For safety disable calling when the demo ends. Caller status reflects the local Fish app; the default Twilio callback reports completion, not every call progression state.

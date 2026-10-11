@@ -7,6 +7,7 @@ import {align,mapTracks} from './geo';
 import {stopByID} from './stops';
 import {cleanZones} from './zones';
 import {hasSignalController} from './signals';
+import {observeCrash} from './crash-service';
 import type {StopAnalytics} from './types';
 const dataRoot=process.env.SWARMFLOW_DATA_DIR||join(process.cwd(),'.data');
 const globals=globalThis as unknown as {swarmDb?:DatabaseSync;swarmSchema?:number};
@@ -77,6 +78,8 @@ export function ingest(input:unknown){
  const commands=d.prepare("SELECT id,config FROM commands WHERE node_id=? AND status='pending' ORDER BY created_at").all(id).map(c=>({id:c.id,config:parse(c.config,{})}));
  // Bounded development retention; keep aggregated passage totals on each node.
  if(Math.random()<.005){d.prepare('DELETE FROM receipts WHERE at<?').run(now-7*86400000);d.prepare('DELETE FROM history WHERE bucket<?').run(now-7*86400000);d.prepare('DELETE FROM stop_samples WHERE bucket<?').run(now-7*86400000);}
+ // Evaluate fresh camera captures on ingestion, including the low-latency live path.
+ if(t.capture_ts>=(previous.last_capture as number||0)){const incident=observeCrash(id,t);if(incident)saveDashboardEvent(incident);}
  return {ok:true,duplicate,commands};
 }
 export function ingestBatch(input:unknown){
@@ -176,3 +179,5 @@ export function transitAnalytics():StopAnalytics[]{
  const hours=new Map<number,{at:number;sum:number;peak:number;samples:number}>();for(const r of rows){const at=Math.floor(Number(r.bucket)/3600000)*3600000,h=hours.get(at)||{at,sum:0,peak:0,samples:0};h.sum+=Number(r.waiting);h.peak=Math.max(h.peak,Number(r.waiting));h.samples++;hours.set(at,h);}
  return [{stop,nodes:linked.map(n=>({id:n.id,name:n.name,fresh:n.fresh})),live_waiting:live.length?Math.max(...live):null,samples:rows.length,average:rows.length?rows.reduce((s,r)=>s+Number(r.waiting),0)/rows.length:null,peak:rows.length?Math.max(...rows.map(r=>Number(r.waiting))):null,crowded_samples:rows.filter(r=>r.crowded===1).length,warnings:Number(d.prepare('SELECT COUNT(*) n FROM stop_warnings WHERE stop_id=? AND at>=?').get(id,since)!.n),hourly:[...hours.values()].map(h=>({at:h.at,average:h.sum/h.samples,peak:h.peak,samples:h.samples}))}];});
 }
+
+export function saveDashboardEvent(i:{id:string;node_id:string;at:number;test:boolean;location:string;evidence:unknown}){db().prepare('INSERT OR IGNORE INTO events VALUES(?,?,?,?,?,?,?)').run(i.id,i.node_id,i.test?'collision_test':'possible_collision',(i.test?'TEST · ':'')+'Possible car–pedestrian collision · '+i.location,i.at,'warning',JSON.stringify(i));}
