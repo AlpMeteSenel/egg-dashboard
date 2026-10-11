@@ -94,11 +94,17 @@ export function saveNodeConfig(id:string,input:unknown){
  if(!names.length||names.length>8)throw Error('Define between one and eight light presets.');
  for(const n of names){const pr=obj(presets[n]);if(!Number.isInteger(pr.mode)||Number(pr.mode)<0||Number(pr.mode)>21)throw Error('Preset '+n+' needs a light effect from 0 to 21.');if(!Number.isFinite(pr.brightness)||Number(pr.brightness)<0||Number(pr.brightness)>100)throw Error('Preset '+n+' brightness must be between 0 and 100.');if(!Number.isFinite(pr.for_s)||Number(pr.for_s)<0||Number(pr.for_s)>600)throw Error('Preset '+n+' minimum time must be 0 to 600 seconds.');}
  if(typeof led.fallback!=='string'||!presets[led.fallback])throw Error('Choose the preset shown when nothing is triggered.');
+ const tr=obj(led.traffic);
+ if(Object.keys(tr).length){
+  if(typeof tr.enabled!=='boolean')throw Error('The traffic light needs a true or false switch.');
+  const t=(k:string,lo:number,hi:number)=>{if(tr[k]!==undefined&&(!Number.isInteger(tr[k])||Number(tr[k])<lo||Number(tr[k])>hi))throw Error('Traffic '+k+' must be '+lo+'-'+hi+' seconds.');};
+  t('green_s',1,120);t('yellow_s',1,30);t('red_s',1,120);t('extend_max_s',0,60);
+ }
  const rules=Array.isArray(led.rules)?led.rules:[];
  if(!rules.length||rules.length>12)throw Error('Add between one and twelve lighting rules.');
  const clean=(v:unknown,min:number,max:number,def=0)=>Number.isFinite(v)?Math.max(min,Math.min(Number(v),max)):def;
  const cleanRules=rules.map((raw,i)=>{const r=obj(raw),when=typeof r.when==='string'?r.when.trim():'';if(!when||when.length>120||/(__|\bimport\b|\blambda\b|;)/.test(when)||!/^[\w\s().,'><=!&|:-]+$/.test(when))throw Error('Rule '+(i+1)+' has an unsafe condition.');if(typeof r.led!=='string'||!presets[r.led])throw Error('Rule '+(i+1)+' needs a known preset.');return {name:(typeof r.name==='string'&&r.name.trim()?r.name:'rule '+(i+1)).slice(0,40),when:when.replace(/\bAND\b/g,'and').replace(/\bOR\b/g,'or'),led:r.led,on_s:clean(r.on_s,0,300),off_s:clean(r.off_s,0,300),priority:clean(r.priority,-10,20,0)};});
- const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[],led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),rules:cleanRules}};
+ const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[],led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),...(Object.keys(tr).length?{traffic:{enabled:tr.enabled,green_s:tr.green_s??12,yellow_s:tr.yellow_s??3,red_s:tr.red_s??10,extend_max_s:tr.extend_max_s??15}}:{}),rules:cleanRules}};
  const d=db();if(!d.prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');
  d.prepare('INSERT OR REPLACE INTO node_config VALUES(?,?,?)').run(id,JSON.stringify(cleanCfg),Date.now());
  const commandID=randomUUID();d.prepare('INSERT INTO commands VALUES(?,?,?,?,?,?)').run(commandID,id,JSON.stringify({cfg:cleanCfg}),'pending',null,Date.now());

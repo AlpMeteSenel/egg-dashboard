@@ -4,7 +4,10 @@ import {Check,ChevronDown,Plus,Settings2,X} from 'lucide-react';
 import type {NodeRecord} from '@/lib/types';
 type Preset={mode:number;brightness:number;for_s:number};
 type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s:number;off_s:number;priority:number;raw:string|null};
-type CfgDoc={fps:number;quality:number;size:string;zones:unknown[];led:{presets:Record<string,Preset>;fallback:string;cooldown_s:number;rules:RuleDraft[]}};
+type CfgDoc={fps:number;quality:number;size:string;zones:unknown[];led:{presets:Record<string,Preset>;fallback:string;cooldown_s:number;traffic?:Traffic;rules:RuleDraft[]}};
+type Traffic={enabled:boolean;green_s:number;yellow_s:number;red_s:number;extend_max_s:number};
+const DEFAULT_TRAFFIC:Traffic={enabled:false,green_s:12,yellow_s:3,red_s:10,extend_max_s:15};
+const phaseOf=(node?:NodeRecord)=>{const c=node?.telemetry?.vision?.led_command;if(!c)return null;const a=c.args[0] as unknown;if(c.method==='set_led'&&Array.isArray(a)){const[r,g,b]=a as number[];if(r>200&&g<60)return 'red';if(r>200&&g>120)return 'yellow';if(g>200)return 'green';if(!r&&!g&&!b)return 'off';}return null;};
 const MODES:[number,string][]=[[1,'Rainbow ambient'],[2,'Breathing'],[3,'Scanning light'],[6,'Lights off'],[7,'Solid red'],[8,'Solid green'],[9,'Solid blue'],[11,'Crossing warning'],[12,'Red alert sweep'],[13,'Hazard flash'],[14,'Siren'],[15,'Crossing wave'],[16,'Flow left'],[17,'Flow right'],[18,'Comet trail'],[19,'Theatre chase'],[20,'Heartbeat'],[21,'Bus-stop beacon']];
 const METRICS:{id:string;label:string;kind:'always'|'bool'|'num';value:number}[]=[
  {id:'true',label:'Always (idle state)',kind:'always',value:0},
@@ -28,13 +31,13 @@ function ruleFrom(when:string,led:string,name:string,rest:{on_s:number;off_s:num
  if(m&&METRICS.some(x=>x.id===m![1]&&x.kind==='num'))return {...base,metric:m[1],op:m[2],value:Number(m[3])};
  return {...base,raw:when,metric:'true',op:'',value:0};}
 const starterRules=()=>[{name:'Person in the crossing',metric:'crossing_active',op:'==',value:1,led:'warning',on_s:0,off_s:5,priority:9,raw:null},{name:'Crowd at the crossing',metric:'zone_occ',op:'>',value:8,led:'hazard',on_s:8,off_s:20,priority:7,raw:null},{name:'Calm idle',metric:'true',op:'',value:0,led:'calm',on_s:0,off_s:0,priority:0,raw:null}] as RuleDraft[];
-const starterCfg=()=>({fps:0,quality:60,size:'vga',zones:[],led:{presets:{warning:{mode:12,brightness:90,for_s:8},hazard:{mode:13,brightness:80,for_s:10},calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',cooldown_s:10,rules:starterRules()}});
+const starterCfg=()=>({fps:0,quality:60,size:'vga',zones:[],led:{presets:{warning:{mode:12,brightness:90,for_s:8},hazard:{mode:13,brightness:80,for_s:10},calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',traffic:{...DEFAULT_TRAFFIC},cooldown_s:10,rules:starterRules()}});
 export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord;onNotice:(m:string)=>void;onError:(m:string)=>void}){
  const [open,setOpen]=useState(false),[cfg,setCfg]=useState<CfgDoc|null>(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[newName,setNewName]=useState('');
  useEffect(()=>{setCfg(null);setLoaded(false);setOpen(false);if(!node)return;let stop=false;
   fetch('/api/nodes/'+node.id+'/config',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(stop)return;
    if(d&&d.cfg){const c=d.cfg;const led=c.led;
-    setCfg({fps:c.fps,quality:c.quality,size:c.size,zones:c.zones||[],led:{presets:led.presets,fallback:led.fallback,cooldown_s:led.cooldown_s,rules:(led.rules||[]).map((r:RuleDraft&{when:string})=>ruleFrom(r.when,r.led,r.name,{on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}});}
+    setCfg({fps:c.fps,quality:c.quality,size:c.size,zones:c.zones||[],led:{presets:led.presets,fallback:led.fallback,cooldown_s:led.cooldown_s,traffic:led.traffic,rules:(led.rules||[]).map((r:RuleDraft&{when:string})=>ruleFrom(r.when,r.led,r.name,{on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}});}
    setLoaded(true);}).catch(()=>{if(!stop)setLoaded(true);});
   return()=>{stop=true;};},[node?.id]);
  if(!node)return null;
@@ -45,7 +48,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
  const removePreset=(n:string)=>{const presets={...cfg!.led.presets};delete presets[n];setLed({presets,rules:cfg!.led.rules.filter(r=>r.led!==n)});};
  const setRule=(i:number,patch:Partial<RuleDraft>)=>setLed({rules:cfg!.led.rules.map((r,j)=>j===i?{...r,...patch}:r)});
  const save=async()=>{if(!cfg)return;setBusy(true);
-  const payload={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:cfg.zones,led:{presets:cfg.led.presets,fallback:cfg.led.fallback,cooldown_s:cfg.led.cooldown_s,rules:cfg.led.rules.map(r=>({name:r.name,when:r.raw??whenFrom(r),led:r.led,on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}};
+  const payload={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:cfg.zones,led:{presets:cfg.led.presets,fallback:cfg.led.fallback,cooldown_s:cfg.led.cooldown_s,traffic:cfg.led.traffic??DEFAULT_TRAFFIC,rules:cfg.led.rules.map(r=>({name:r.name,when:r.raw??whenFrom(r),led:r.led,on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}};
   try{const r=await fetch('/api/nodes/'+node.id+'/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cfg:payload})});const d=await r.json();if(!r.ok)throw Error(d.error);onNotice('Settings sent to '+node.name+'. The camera confirms within a minute.');}
   catch(e){onError(e instanceof Error?e.message:'Could not save camera settings');}finally{setBusy(false);}};
  const summary=cfg?'stream '+(cfg.fps?cfg.fps+' fps':'as fast as possible')+' · '+cfg.size.toUpperCase()+' · '+cfg.led.rules.length+' lighting rules':'stream + lighting rules';
@@ -86,6 +89,18 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
     <label>When nothing is triggered<select aria-label="Fallback preset" value={cfg.led.fallback} onChange={e=>setLed({fallback:e.target.value})}>{Object.keys(cfg.led.presets).map(n=><option key={n} value={n}>{n}</option>)}</select></label>
     <label>Re-arm cooldown s<input type="number" min={0} max={300} value={cfg.led.cooldown_s} onChange={e=>setLed({cooldown_s:Number(e.target.value)})}/></label>
    </div>
+   {(()=>{const t=cfg.led.traffic??DEFAULT_TRAFFIC,setT=(patch:Partial<Traffic>)=>setLed({traffic:{...t,...patch}}),phase=phaseOf(node);return <>
+    <span className="eyebrow">TRAFFIC LIGHT · RED → GREEN → YELLOW CYCLE</span>
+    <div className="cfg-row">
+     <label className="cfg-check"><input type="checkbox" checked={t.enabled} onChange={e=>setT({enabled:e.target.checked})}/>Signal on</label>
+     <label className="cfg-mini">green s<input type="number" min={1} max={120} value={t.green_s} onChange={e=>setT({green_s:Number(e.target.value)})}/></label>
+     <label className="cfg-mini">yellow s<input type="number" min={1} max={30} value={t.yellow_s} onChange={e=>setT({yellow_s:Number(e.target.value)})}/></label>
+     <label className="cfg-mini">red s<input type="number" min={1} max={120} value={t.red_s} onChange={e=>setT({red_s:Number(e.target.value)})}/></label>
+     <label className="cfg-mini">max extend s<input type="number" min={0} max={60} value={t.extend_max_s} onChange={e=>setT({extend_max_s:Number(e.target.value)})}/></label>
+     {t.enabled&&phase&&<span className={'pill '+(phase==='green'?'live':phase==='red'?'warning':'neutral')}>{phase}</span>}
+    </div>
+    <p className="cfg-help">Green stretches while someone is in the crossing, up to the extend cap. Red shortens toward one second when the street is clear. Yellow never changes — safety. Turning the signal on takes over the camera's light; turning it off restores the automatic crossing lights.</p>
+   </>;})()}
    <p className="cfg-help">Arm s is how long a condition must hold before the light reacts — 0 reacts instantly, use it for safety rules. Release s keeps the light on briefly after the condition stops, so detection noise never makes the lights flicker.</p>
    <button className="primary full" disabled={busy} onClick={save}><Check size={16}/>{busy?'Sending…':'Send settings to camera'}</button>
    <button className="quiet full" disabled={busy} onClick={()=>setCfg(starterCfg())}>Reset to sensible defaults</button>

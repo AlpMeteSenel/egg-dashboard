@@ -19,4 +19,8 @@ test('camera settings persist, validate and queue as one node command',()=>{
  assert.throws(()=>saveNodeConfig('egg',{cfg:{...cfg,led:{...cfg.led,rules:[{name:'evil',when:'__import__("os").system("rm -rf /")',led:'calm',on_s:0,off_s:0,priority:0}]}}}));
  assert.throws(()=>saveNodeConfig('egg',{cfg:{...cfg,led:{...cfg.led,fallback:'ghost'}}}));
  assert.throws(()=>saveNodeConfig('ghost',{cfg}));assert.equal(nodeConfig('ghost').cfg,null);});
+test('traffic light settings ride the camera config',()=>{const base={fps:1,quality:50,size:'vga',zones:[],led:{presets:{calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',cooldown_s:10,traffic:{enabled:true,green_s:30,yellow_s:4,red_s:20,extend_max_s:20},rules:[{name:'idle',when:'true',led:'calm',on_s:0,off_s:0,priority:0}]}};
+ const s=saveNodeConfig('egg',{cfg:base});
+ assert.deepEqual((s.cfg.led as Record<string,unknown>).traffic,{enabled:true,green_s:30,yellow_s:4,red_s:20,extend_max_s:20});
+ assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,led:{...base.led,traffic:{enabled:true,green_s:500}}}}));});
 test.after(()=>{rmSync(dir,{recursive:true,force:true});});
