@@ -4,8 +4,8 @@ import mapboxgl from 'mapbox-gl';import * as THREE from 'three';
 import {Plus,Minus,LocateFixed,Compass,Box,Map as MapIcon,MapPin} from 'lucide-react';
 import type {NodeRecord,Point,GroundPair} from '@/lib/types';import {TURIN,coverage} from '@/lib/geo';
 import 'mapbox-gl/dist/mapbox-gl.css';
-export type MapMode='browse'|'place'|'align';
-type Props={nodes:NodeRecord[];selected:string;onSelect:(id:string)=>void;mode:MapMode;onPoint:(p:Point)=>void;draft:Point|null;heading:number;pairs:GroundPair[];pendingImage:Point|null;guided:boolean;focusTick:number;demo:boolean};
+export type MapMode='browse'|'place'|'align'|'signals';
+type Props={nodes:NodeRecord[];selected:string;onSelect:(id:string)=>void;mode:MapMode;onPoint:(p:Point)=>void;draft:Point|null;heading:number;pairs:GroundPair[];pendingImage:Point|null;guided:boolean;focusTick:number;demo:boolean;signalDraft:Point[]};
 export default function CityMap(props:Props){
  const holder=useRef<HTMLDivElement>(null),mapRef=useRef<mapboxgl.Map|null>(null),markers=useRef<mapboxgl.Marker[]>([]),latest=useRef(props),peopleRef=useRef<THREE.Group|null>(null),originRef=useRef<mapboxgl.MercatorCoordinate|null>(null);latest.current=props;
  const [error,setError]=useState(''),[ready,setReady]=useState(false),[threeD,setThreeD]=useState(true),[provider,setProvider]=useState('Mapbox');
@@ -51,16 +51,17 @@ export default function CityMap(props:Props){
  useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const coverageSource=map.getSource('coverage') as mapboxgl.GeoJSONSource|undefined,peopleSource=map.getSource('people') as mapboxgl.GeoJSONSource|undefined;if(!coverageSource||!peopleSource)return;
   markers.current.forEach(m=>m.remove());markers.current=[];
   for(const n of props.nodes){if(!n.placement)continue;const el=document.createElement('button');el.className='camera-pin'+(n.id===props.selected?' selected':'')+(n.online?'':' offline');el.setAttribute('aria-label','Select '+n.name);el.innerHTML='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3"/></svg>';el.addEventListener('click',e=>{e.stopPropagation();latest.current.onSelect(n.id);});markers.current.push(new mapboxgl.Marker({element:el}).setLngLat([n.placement.lng,n.placement.lat]).addTo(map));
-   const t=n.telemetry?.vision?.traffic;if(t&&(t[0]||t[1]||t[2])){const s=document.createElement('div');s.className='signal-marker';s.innerHTML='<b class="'+(t[0]?'on red':'')+'"></b><b class="'+(t[1]?'on amber':'')+'"></b><b class="'+(t[2]?'on green':'')+'"></b>';markers.current.push(new mapboxgl.Marker({element:s,anchor:'bottom',offset:new mapboxgl.Point(16,-6)}).setLngLat([n.placement.lng,n.placement.lat]).addTo(map));}}
+   const t=n.telemetry?.vision?.traffic,lit=!!t&&(t[0]||t[1]||t[2]);
+   for(const spot of (n.placement.signals&&n.placement.signals.length?n.placement.signals:[null])){const s=document.createElement('div');s.className='signal-marker'+(lit?'':' dim')+(n.id===props.selected?' signal-sel':'');s.innerHTML='<b class="'+(t&&t[0]?'on red':'')+'"></b><b class="'+(t&&t[1]?'on amber':'')+'"></b><b class="'+(t&&t[2]?'on green':'')+'"></b>';markers.current.push(new mapboxgl.Marker({element:s,anchor:'bottom',offset:new mapboxgl.Point(16,-6)}).setLngLat((spot||[n.placement.lng,n.placement.lat]) as Point).addTo(map));}}
   const append=(p:Point,text:string,cls:string)=>{const el=document.createElement('div');el.className=cls;el.textContent=text;markers.current.push(new mapboxgl.Marker({element:el}).setLngLat(p).addTo(map));};
-  if(props.draft)append(props.draft,'⌖','draft-pin');for(let i=0;i<props.pairs.length;i++)append(props.pairs[i].map,String.fromCharCode(65+i),'landmark-pin');
+  if(props.draft)append(props.draft,'⌖','draft-pin');for(let i=0;i<props.pairs.length;i++)append(props.pairs[i].map,String.fromCharCode(65+i),'landmark-pin');props.signalDraft.forEach((p,i)=>append(p,String(i+1),'landmark-pin signal-draft-pin'));
   const areas=props.nodes.filter(n=>n.placement).map(n=>({type:'Feature' as const,properties:{},geometry:{type:'Polygon' as const,coordinates:[coverage(n.placement!)]}}));if(props.draft)areas.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[coverage({lng:props.draft[0],lat:props.draft[1],heading:props.heading,pairs:[]})]}});
   coverageSource.setData({type:'FeatureCollection',features:areas});
   const points=props.nodes.flatMap(n=>n.mapped.map(t=>({type:'Feature' as const,properties:{id:t.id,cls:t.cls,conf:t.conf,extrapolated:t.extrapolated,demo:false,node_name:n.name},geometry:{type:'Point' as const,coordinates:[t.lng,t.lat]}})));
   if(props.demo){for(let i=0;i<6;i++)points.push({type:'Feature',properties:{id:900+i,cls:'person',conf:1,extrapolated:false,demo:true,node_name:'Preview'},geometry:{type:'Point',coordinates:[TURIN[0]+.00005*(i-3),TURIN[1]+.00006]}});}
   peopleSource.setData({type:'FeatureCollection',features:points});
   (peopleRef.current as THREE.Group&{refresh?:(n:NodeRecord[],demo:boolean)=>void})?.refresh?.(props.nodes,props.demo);map.getCanvas().style.cursor=props.mode==='browse'?'': 'crosshair';map.triggerRepaint();
- },[props.nodes,props.selected,props.mode,props.draft,props.heading,props.pairs,props.demo,ready]);
+ },[props.nodes,props.selected,props.mode,props.draft,props.heading,props.pairs,props.demo,props.signalDraft,ready]);
  useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;const n=latest.current.nodes.find(n=>n.id===latest.current.selected);if(n?.placement)map.flyTo({center:[n.placement.lng,n.placement.lat],zoom:18.5,duration:1100});else if(latest.current.focusTick)map.flyTo({center:TURIN,zoom:16.4,duration:1000});},[props.selected,props.focusTick,ready]);
  useEffect(()=>{const map=mapRef.current;if(!map||!ready)return;if(props.demo){map.flyTo({center:TURIN,zoom:20,pitch:55,duration:1100});setThreeD(true);if(map.getLayer('city-buildings-3d'))map.setLayoutProperty('city-buildings-3d','visibility','visible');}},[props.demo,ready]);
  const toggle3D=()=>{const map=mapRef.current;if(!map||!map.getLayer('city-buildings-3d'))return;setThreeD(!threeD);map.easeTo({pitch:threeD?0:55,duration:700});map.setLayoutProperty('city-buildings-3d','visibility',threeD?'none':'visible');};

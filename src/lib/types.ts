@@ -1,7 +1,7 @@
 export type Point = [number, number];
 export type Mode = 'crosswalk' | 'bus_stop';
 export type GroundPair = { image: Point; map: Point };
-export type Placement = { lng: number; lat: number; heading: number; pairs: GroundPair[] };
+export type Placement = { lng: number; lat: number; heading: number; pairs: GroundPair[]; signals?: Point[] };
 export type Track = { id: number; cls: string; conf: number; box: [number, number, number, number]; speed_kmh: number | null; speed_status?: string; confirmed: boolean; inside: boolean; retained?: boolean; last_seen_s?: number; trail?: Point[] };
 export type Telemetry = { capture_ts: number; sample_id: string; pending_samples:number; source_kind: string; mcu_ok: boolean; fps: number; inference_ms: number; frame_age_ms: number; sensors: {temp_c?:number|null;hum_pct?:number|null;brightness_percent?:number;led_mode?:number}; vision: { camera_mode:Mode; auto_led:boolean; occupied:boolean; crossing_status:string; traffic?:number[];cfg?:number;cfg_hash?:string; tracks:Track[]; counts:Record<string,number>; directions:Record<string,number>; events:Record<string,unknown>[]; profile?:Record<string,unknown>; command_latency_ms?:number|null; led_command?:{automatic:boolean;ack_ms:number;at:number;args:number[];method:string}; bus_stop:{count:number|null;threshold:number;threshold_reached:boolean;status:string;warnings:Record<string,unknown>[]}} };
 export type MappedTrack = Track & { lng:number;lat:number;extrapolated:boolean };
