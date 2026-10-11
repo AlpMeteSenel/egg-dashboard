@@ -407,3 +407,5 @@ permissions, media storage, or video export added. Typecheck/build passed; brows
 verified85/100, Manual provenance, panel absent in recording view, Esc restoration,
 then restored automatic mode and candidate50. Source lives in components/ThreatFallback,
 Dashboard and IntersectionRisk. Server remains on localhost3000.
+
+Connection visualization corrected: exactly one animated illustrative edge between egg and esp32cam-1; no edge to traffic lights/intersection. View connected modules fits these two camera pins, maxzoom20.

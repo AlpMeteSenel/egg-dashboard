@@ -125,7 +125,7 @@ people/vehicle counts, co-presence, occupied crossing and available estimated
 speed above30km/h. It holds brief detection gaps for about2s, never sums changing
 track IDs, and shows unknown for stale data. Dashed links and moving dots are
 explicitly illustrative module/controller connections; pulses stop for offline
-endpoints. **View connected modules** fits cameras plus the intersection.
+endpoints. **View connected modules** focuses Egg and ESP32.
 
 UNO adaptive demand now runs swarmflow-adaptive-intersection.service from TASK-058.
 Confirmed fresh counts use a2s peak hold; unconfirmed/retained tracks and cumulative
