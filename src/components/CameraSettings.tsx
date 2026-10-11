@@ -105,7 +105,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
     <label className="cfg-mini">yellow s<input type="number" min={1} max={30} value={cfg.signal.cycle.yellow_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,yellow_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">red s<input type="number" min={1} max={600} value={cfg.signal.cycle.red_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,red_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">max extend s<input type="number" min={0} max={60} value={cfg.signal.cycle.extend_max_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,extend_max_s:Number(e.target.value)}})}/></label>
-    <label className="cfg-check"><input type="checkbox" checked={cfg.signal.strip} onChange={e=>setSig({strip:e.target.checked})}/>Strip as signal (solid colors)</label>
+    <label className="cfg-check"><input type="checkbox" checked={cfg.signal.strip} onChange={e=>setSig({strip:e.target.checked})}/>Strip as signal (thirds red/yellow/green)</label>
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal.cycle.shorten_red} onChange={e=>setSig({cycle:{...cfg.signal.cycle,shorten_red:e.target.checked}})}/>Shorten red when clear</label>
    </div>
    <span className="eyebrow">SIGNAL RULES · OVERRIDE THE CYCLE AND THE IDLE COLOR</span>
