@@ -353,3 +353,20 @@ is variable (~0.3–1.2fps in observed windows), not an inference bottleneck.
 Browser box drawing/add/cancel verified without leaving test geometry on real cameras.
 Unchanged config round-trips passed for UNO and ESP peer; configuration ack means
 peer acceptance, while ESP hardware applies streaming config on its next gateway poll.
+
+## Four intersection lights, 2026-10-11
+
+Removed automatic signal-at-every-camera fallback. ESP32-CAM is explicitly
+excluded from signal ownership/rendering/placement controls. Saved four `egg`
+placement.signals around Via Vela × Via Bricherasio, center7.666883,45.0652631
+from OpenStreetMap node252417596. Camera pins remain at Largo Vittorio Emanuele II.
+No node firmware or timing change. Source layout backup/provenance in the Codex
+workspace outputs/vela-bricherasio-signal-layout.json. These are illustrative
+pole locations, not surveyed municipal infrastructure.
+
+TrafficLightLayer uses shared Three geometry/materials and retained actors for
+metal poles, bases, housings, visors and emissive lenses. mapSignals requires
+explicit placements and a signal controller; stale telemetry clears lit phases.
+Countdown badges retain per-light UNO phases, while **Locate traffic lights**
+fits the intersection. Signals1+3 and2+4 follow opposite road pairs.
+Browser confirmed four UNO markers, phase changes, and no console errors.

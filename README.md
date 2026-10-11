@@ -111,3 +111,11 @@ the relay preserves source timestamps. One local publisher reads `127.0.0.1:9010
 Reconnect it with `npm run connect:peer -- esp32cam-1 127.0.0.1` only if another
 publisher for the same node is not already running. The UNO Q remains connected
 through `npm run connect:usb`, using its on-board publisher (TASK-057).
+
+Intersection visualization: four explicitly placed signals belong to `egg`, at
+Via Vincenzo Vela × Via Giovanni Battista Bricherasio (OSM node252417596).
+ESP32-CAM is capture-only and has no traffic-light marker or placement controls.
+3D signals have poles, housings, visors and lit lenses; 2D retains compact signal
+icons. Opposite-pair phases and countdowns use UNO telemetry; stale data turns
+lenses dark. **Locate traffic lights** focuses the intersection. Pole locations
+are approximate visualization positions derived from street centerlines.

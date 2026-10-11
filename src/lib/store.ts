@@ -6,6 +6,7 @@ import type {NodeRecord,Telemetry,Placement,Overview,EventRecord,Track,Mode} fro
 import {align,mapTracks} from './geo';
 import {stopByID} from './stops';
 import {cleanZones} from './zones';
+import {hasSignalController} from './signals';
 import type {StopAnalytics} from './types';
 const dataRoot=process.env.SWARMFLOW_DATA_DIR||join(process.cwd(),'.data');
 const globals=globalThis as unknown as {swarmDb?:DatabaseSync;swarmSchema?:number};
@@ -93,7 +94,7 @@ export function validatePlacement(value:unknown):Placement|null{
  const pairs=raw.map(r=>{const a=obj(r);if(!Array.isArray(a.image)||!Array.isArray(a.map)||a.image.length!==2||a.map.length!==2||!a.image.every(x=>finite(x)&&x>=0&&x<=1)||!a.map.every(finite)||Math.abs(a.map[0])>180||Math.abs(a.map[1])>85)throw Error('Invalid landmark coordinates.');return {image:a.image as [number,number],map:a.map as [number,number]};});
  if(pairs.length)align(pairs);const sigs=Array.isArray(p.signals)?p.signals.filter(a=>Array.isArray(a)&&a.length===2&&a.every(finite)&&Math.abs(a[0])<=180&&Math.abs(a[1])<=85).slice(0,12) as [number,number][]:[];return {lng:p.lng,lat:p.lat,heading:p.heading,pairs,...(sigs.length?{signals:sigs}:{})};
 }
-export function updateNode(id:string,input:unknown){if(!safeID(id))throw Error('Invalid node ID.');const p=obj(input),name=typeof p.name==='string'?p.name.trim().slice(0,60):null;if(!name)throw Error('Give the camera a name.');const placement=validatePlacement(p.placement);db().prepare('UPDATE nodes SET name=?,placement=? WHERE id=?').run(name,placement?JSON.stringify(placement):null,id);return overview();}
+export function updateNode(id:string,input:unknown){if(!safeID(id))throw Error('Invalid node ID.');const p=obj(input),name=typeof p.name==='string'?p.name.trim().slice(0,60):null;if(!name)throw Error('Give the camera a name.');const placement=validatePlacement(p.placement);const row=db().prepare('SELECT telemetry FROM nodes WHERE id=?').get(id);if(placement?.signals?.length&&!hasSignalController({id,telemetry:parse<Telemetry|null>(row?.telemetry,null)}))throw Error('This camera has no traffic-light controller.');db().prepare('UPDATE nodes SET name=?,placement=? WHERE id=?').run(name,placement?JSON.stringify(placement):null,id);return overview();}
 export function controlNode(id:string,input:unknown){const p=obj(input),config:Record<string,unknown>={};if(p.camera_mode!==undefined){if(p.camera_mode!=='crosswalk'&&p.camera_mode!=='bus_stop')throw Error('Unknown camera mode.');config.camera_mode=p.camera_mode as Mode;}if(p.auto_led!==undefined){if(typeof p.auto_led!=='boolean')throw Error('Automatic lights needs true or false.');config.auto_led=p.auto_led;}if(!Object.keys(config).length)throw Error('Choose a mode or light setting.');if(!db().prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');const commandID=randomUUID();db().prepare('INSERT INTO commands VALUES(?,?,?,?,?,?)').run(commandID,id,JSON.stringify(config),'pending',null,Date.now());return {ok:true,command_id:commandID};}
 export function nodeConfig(id:string){if(!safeID(id))throw Error('Invalid node ID.');const r=db().prepare('SELECT cfg FROM node_config WHERE node_id=?').get(id);return {cfg:r?parse<Record<string,unknown>|null>(r.cfg,null):null};}
 export function cleanNodeConfig(input:unknown){

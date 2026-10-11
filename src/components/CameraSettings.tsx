@@ -1,4 +1,5 @@
 'use client';
+import {hasSignalController} from '@/lib/signals';
 import {useEffect,useState} from 'react';
 import {Check,ChevronDown,Plus,Settings2,X} from 'lucide-react';
 import type {NodeRecord} from '@/lib/types';
@@ -102,6 +103,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
     <label>Re-arm cooldown s<input type="number" min={0} max={300} value={cfg.led.cooldown_s} onChange={e=>setLed({cooldown_s:Number(e.target.value)})}/></label>
    </div>
    <p className="cfg-help">Arm s is how long a condition must hold before the light reacts — 0 reacts instantly, use it for safety rules. Release s keeps the light on briefly after the condition stops, so detection noise never makes the lights flicker.</p>
+   {hasSignalController(node)&&<>
    <span className="eyebrow">TRAFFIC SIGNAL · THE THREE LEDS ON PINS 8 · 9 · 10 · THE STRIP JOINS AS THREE SEGMENTS{phase?` · NOW ${phase}`:''}</span>
    <div className="cfg-row">
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal_on} onChange={e=>setCfg(c=>c?{...c,signal_on:e.target.checked}:c)}/>Traffic signal system (separate from crosswalk safety)</label>
@@ -134,6 +136,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    </div>;})}
    <div className="cfg-add"><button className="quiet" disabled={cfg.signal.rules.length>=12} onClick={()=>setSig({rules:[...cfg.signal.rules,{name:'new signal rule',metric:'crossing_active',op:'==',value:1,led:'green',on_s:0,off_s:3,priority:9,raw:null}]})}><Plus size={14}/>Add signal rule</button></div>
    <p className="cfg-help">Signal rules check every second and beat the timed cycle; the idle color shows when no rule fires. The timed cycle stretches green while someone is in the crossing (up to the extend cap). Turning the signal off returns the strip to crosswalk safety mode.</p></>}
+   </>}
    <button className="primary full" disabled={busy} onClick={save}><Check size={16}/>{busy?'Sending…':'Send settings to camera'}</button>
    <button className="quiet full" disabled={busy} onClick={()=>setCfg(starterCfg())}>Reset to sensible defaults</button>
    {node.id!=='esp32cam-1'&&<p className="cfg-help">This node applies stream settings on its next boot. Lighting rules run on the camera's side for it.</p>}
