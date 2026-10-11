@@ -409,3 +409,24 @@ then restored automatic mode and candidate50. Source lives in components/ThreatF
 Dashboard and IntersectionRisk. Server remains on localhost3000.
 
 Connection visualization corrected: exactly one animated illustrative edge between egg and esp32cam-1; no edge to traffic lights/intersection. View connected modules fits these two camera pins, maxzoom20.
+
+## Connection recovery and macOS supervision
+
+After a network change, Mac172.20.10.3 and Egg172.20.10.2 were on the new hotspot;
+old ESP gateway10.42.0.1:9010 unreachable. Dashboard/local worker had stopped.
+Restored dashboard and ADB routing under user LaunchAgents:
+com.swarmflow.dashboard, com.swarmflow.usb-route, com.swarmflow.esp-worker.
+Plists live in ~/Library/LaunchAgents; logs under .data/services. They are login
+services (Mac must be awake). Existing ingest hub3080 was already running and left alone.
+USB watcher reapplies reverse18080→3000, forwards18765→8091 and19011→9011 every10s.
+Egg verified fresh with MCU healthy, publisher queue0 and no error.
+
+ESP worker run-mac.sh now waits for the actual gateway /status to show esp32cam-1
+and a frame age<5s before launching worker/relay/publisher. It does not fabricate
+presence while the gateway is missing. For a new gateway URL, write the URL only
+(no credentials) to ../swarmflow-esp32/.runtime/frame-source.txt. Waiting startup
+reads changes every5s; restart an already running ESP job with launchctl kickstart
+-k gui/501/com.swarmflow.esp-worker. Initial gateway unavailable; user asked for its
+new IP. Do not claim ESP connected until successive frame seq changes are verified.
+Check status with launchctl print gui/501/<label>; stop/remove supervision with
+launchctl bootout gui/501 ~/Library/LaunchAgents/<label>.plist. No board changes.
