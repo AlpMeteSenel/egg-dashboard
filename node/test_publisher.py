@@ -4,6 +4,21 @@ import publisher
 from pathlib import Path
 from publisher import packet_from_state,Outbox
 class Tests(unittest.TestCase):
+ def test_cfg_routes_to_peer_and_mirrors_only_reserved_crossing_without_enabling_lights(self):
+  polygon=[[.1,.1],[.9,.1],[.9,.9],[.1,.9]]
+  cfg={'local_config':'local','cfg_endpoint':'peer','sync_crossing_zone':True}
+  settings={'cfg':{'zones':[{'id':'cars','polygon':polygon},{'id':'crossing','polygon':polygon}]}}
+  with patch.object(publisher,'request',side_effect=[{'ok':True},{'ok':True}]) as send:
+   self.assertTrue(publisher.apply_settings(cfg,settings));self.assertEqual(send.call_args_list[0].args,('peer',settings));self.assertEqual(send.call_args_list[1].args,('local',{'zone':polygon}))
+  with patch.object(publisher,'request',side_effect=[{'ok':True},{'ok':False}]):self.assertFalse(publisher.apply_settings(cfg,settings))
+  with patch.object(publisher,'request',return_value={'ok':True}) as send:
+   self.assertTrue(publisher.apply_settings({**cfg,'sync_crossing_zone':False},settings));self.assertEqual(send.call_count,1)
+  with patch.object(publisher,'request',side_effect=[{'ok':True},{'ok':True}]) as send:
+   publisher.apply_settings(cfg,{'cfg':{'zones':[]}});self.assertEqual(send.call_args_list[1].args,('local',{'zone':None}))
+ def test_versioned_esp_worker_config_ack_is_not_reported_as_failure(self):
+  settings={'cfg':{'zones':[]}}
+  with patch.object(publisher,'request',return_value={'cfg':settings['cfg'],'v':2,'hash':'abcdef12'}):self.assertTrue(publisher.apply_settings({'local_config':'local','cfg_endpoint':'peer'},settings))
+  with patch.object(publisher,'request',return_value={'cfg':{'different':True},'v':2,'hash':'abcdef12'}):self.assertFalse(publisher.apply_settings({'local_config':'local','cfg_endpoint':'peer'},settings))
  def test_packet_carries_live_geometry_but_never_persists_camera_bytes(self):
   state={'mcu_ok':True,'camera':{'stream_id':'stream','frame_id':4,'capture_ts':1700000000,'source_kind':'live','frame':'JPEG','fps':4},'vision':{'camera_mode':'crosswalk','auto_led':True,'tracks':[],'counts':{'person':3},'bus_stop':{}}}
   packet,jpg=packet_from_state(state,'egg');self.assertEqual(jpg,'JPEG');self.assertNotIn('preview',packet);self.assertEqual(packet['vision']['auto_led'],True)

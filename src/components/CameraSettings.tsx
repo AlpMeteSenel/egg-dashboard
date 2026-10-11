@@ -35,7 +35,7 @@ const starterRules=()=>[{name:'Person in the crossing',metric:'crossing_active',
 const starterCfg=()=>({fps:0,quality:60,size:'vga',zones:[],led:{presets:{warning:{mode:12,brightness:90,for_s:8},hazard:{mode:13,brightness:80,for_s:10},calm:{mode:21,brightness:18,for_s:0}},fallback:'calm',cooldown_s:10,rules:starterRules()},signal_on:true,signal:{fallback:'red',strip:false,cooldown_s:10,cycle:{enabled:false,green_s:12,yellow_s:3,red_s:10,extend_max_s:15,shorten_red:true},rules:[{name:'Walk on green',metric:'crossing_active',op:'==',value:1,led:'green',on_s:0,off_s:3,priority:9,raw:null}]}});
 const phaseOf=(node?:NodeRecord)=>{const t=node?.telemetry?.vision?.traffic;if(t&&t.some(v=>v>0))return t[0]>0?'red':t[1]>0?'yellow':t[2]>0?'green':null;return null;};
 export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord;onNotice:(m:string)=>void;onError:(m:string)=>void}){
- const [open,setOpen]=useState(false),[cfg,setCfg]=useState<CfgDoc|null>(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[newName,setNewName]=useState(''),[sent,setSent]=useState<{prev?:string}>({});
+ const [open,setOpen]=useState(false),[cfg,setCfg]=useState<CfgDoc|null>(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[newName,setNewName]=useState(''),[sent,setSent]=useState<{command?:string}>({});
  useEffect(()=>{setCfg(null);setLoaded(false);setOpen(false);if(!node)return;let stop=false;
   fetch('/api/nodes/'+node.id+'/config',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{if(stop)return;
    if(d&&d.cfg){const c=d.cfg,led=c.led,sig=c.signal;
@@ -53,11 +53,11 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
  const removePreset=(n:string)=>{const presets={...cfg!.led.presets};delete presets[n];setLed({presets,rules:cfg!.led.rules.filter(r=>r.led!==n)});};
  const setRule=(i:number,patch:Partial<RuleDraft>)=>setLed({rules:cfg!.led.rules.map((r,j)=>j===i?{...r,...patch}:r)});
  const setSigRule=(i:number,patch:Partial<RuleDraft>)=>setSig({rules:cfg!.signal.rules.map((r,j)=>j===i?{...r,...patch}:r)});
- const save=async()=>{if(!cfg)return;setBusy(true);setSent({prev:node?.telemetry?.vision?.cfg_hash});
+ const save=async()=>{if(!cfg)return;setBusy(true);setSent({});
   const rules=(list:RuleDraft[])=>list.map(r=>({name:r.name,when:r.raw??whenFrom(r),led:r.led,on_s:r.on_s,off_s:r.off_s,priority:r.priority}));
-  const g=await (await fetch('/api/nodes/'+node.id+'/config',{cache:'no-store'})).json();
+  try{const g=await (await fetch('/api/nodes/'+node.id+'/config',{cache:'no-store'})).json();
   const payload={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(g.cfg?.zones)?g.cfg.zones:[],...(cfg.signal_on?{signal:{fallback:cfg.signal.fallback,strip:cfg.signal.strip,cooldown_s:cfg.signal.cooldown_s,cycle:cfg.signal.cycle,...(cfg.signal.inter?{intersection:cfg.signal.inter}:{}),rules:rules(cfg.signal.rules)}}:{}),led:{presets:cfg.led.presets,fallback:cfg.led.fallback,cooldown_s:cfg.led.cooldown_s,rules:rules(cfg.led.rules)}};
-  try{const r=await fetch('/api/nodes/'+node.id+'/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cfg:payload})});const d=await r.json();if(!r.ok)throw Error(d.error);onNotice('Settings sent to '+node.name+'. The camera confirms within a minute.');}
+  const r=await fetch('/api/nodes/'+node.id+'/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cfg:payload})});const d=await r.json();if(!r.ok)throw Error(d.error);setSent({command:d.command_id});onNotice('Settings sent to '+node.name+'. The camera confirms within a minute.');}
   catch(e){onError(e instanceof Error?e.message:'Could not save camera settings');}finally{setBusy(false);}};
  const summary=cfg?'stream '+(cfg.fps?cfg.fps+' fps':'as fast as possible')+' · '+cfg.size.toUpperCase()+' · '+cfg.led.rules.length+' strip rules':'stream + lighting rules';
  const phase=phaseOf(node);
@@ -105,9 +105,10 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    <span className="eyebrow">TRAFFIC SIGNAL · THE THREE LEDS ON PINS 8 · 9 · 10 · THE STRIP JOINS AS THREE SEGMENTS{phase?` · NOW ${phase}`:''}</span>
    <div className="cfg-row">
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal_on} onChange={e=>setCfg(c=>c?{...c,signal_on:e.target.checked}:c)}/>Traffic signal system (separate from crosswalk safety)</label>
-    <span className={'pill '+(sent.prev&&node?.telemetry?.vision?.cfg_hash&&node.telemetry.vision.cfg_hash!==sent.prev?'live':sent.prev&&node?.telemetry?.vision?.cfg_hash===sent.prev?'warning':'neutral')}>{node?.telemetry?.vision?.cfg_hash?(sent.prev?(node.telemetry.vision.cfg_hash!==sent.prev?'✓ applied on device':sent.prev&&'Applying on device…'):'device runs '+node.telemetry.vision.cfg_hash):'device has not reported a config'}</span>
+    <span className="pill neutral">{sent.command?('Settings '+(node.commands.find(c=>c.id===sent.command)?.status||'pending')):node.telemetry?.vision.cfg_hash?'Reported config '+node.telemetry.vision.cfg_hash:'Awaiting peer configuration'}</span>
    </div>
    {cfg.signal_on&&<>
+    <label className="cfg-check"><input type="checkbox" checked={cfg.signal.strip} onChange={e=>setSig({strip:e.target.checked})}/>Use LED strip for the traffic signal (release it for crossing alerts)</label>
     <label>Idle color<select aria-label="Idle signal color" value={cfg.signal.fallback} onChange={e=>setSig({fallback:e.target.value})}>{COLORS.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal.cycle.enabled} onChange={e=>setSig({cycle:{...cfg.signal.cycle,enabled:e.target.checked}})}/>Timed cycle</label>
     <label className="cfg-check"><input type="checkbox" checked={!!cfg.signal.inter?.enabled} onChange={e=>setSig({inter:e.target.checked?cfg.signal.inter??{enabled:true,green_s:12,other_green_s:290,yellow_s:3,allred_s:2,extend_max_s:10,lights:4}:{...(cfg.signal.inter as Inter),enabled:false}})}/>Cross intersection · opposite lights share green</label>

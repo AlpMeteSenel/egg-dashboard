@@ -12,7 +12,8 @@
     "connect:wifi": "node scripts/connect-wifi.mjs",
     "bridge:lan": "node scripts/bridge-lan.mjs",
     "hub": "tsx scripts/ingest-hub.ts",
-    "node:config": "tsx scripts/prepare-node.ts"
+    "node:config": "tsx scripts/prepare-node.ts",
+    "connect:peer": "node scripts/connect-peer.mjs"
   },
   "dependencies": {
     "next": "16.4.0",

@@ -1,0 +1,16 @@
+import {chmodSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {spawn} from 'node:child_process';
+import {dirname,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=join(dirname(fileURLToPath(import.meta.url)),'..');
+const [id,address,port='9010']=process.argv.slice(2);
+if(!/^[a-z0-9_-]{1,48}$/.test(id||'')||!/^[a-zA-Z0-9.-]+$/.test(address||'')||!/^\d{2,5}$/.test(port))throw Error('Usage: npm run connect:peer -- esp32cam-1 <worker-IP> [9010]');
+const saved=JSON.parse(readFileSync(join(root,'.data/node-client.json'),'utf8'));
+const dir=join(root,'.data/peers',id);mkdirSync(dir,{recursive:true});
+const base=`http://${address}:${port}`;
+const config={node_id:id,token:saved.token,endpoint:'http://127.0.0.1:3000/api/ingest',local_state:base+'/api/state',local_config:base+'/api/config',cfg_endpoint:base+'/cfg/'+id,interval:1,outbox_dir:dir,sync_crossing_zone:true};
+const path=join(dir,'client.json');writeFileSync(path,JSON.stringify(config));chmodSync(path,0o600);
+const child=spawn('python3',['-u',join(root,'node/publisher.py'),'--config',path],{cwd:root,stdio:'inherit'});
+console.log(`Connecting ${id} through worker ${address}:${port}. Keep this process running.`);
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));
+child.on('exit',code=>process.exit(code??1));

@@ -95,3 +95,19 @@ The map’s **Live buses / Hide buses** button toggles independent BusTO GPS veh
 `GET /api/buses` reads the public `https://app.bus.to.it/api/paths`, using server-side10-second caching, request coalescing, a12-second timeout and a5MB response bound. Only compact validated current positions are returned. Optional server env `BUSTO_API_URL` can target a different compatible deployment; no BusTO database/MQTT credentials are required or copied. Positions older than90seconds turn grey and disappear after180seconds. Failure shows feed unavailable and retains only bounded-age fixes. New GPS reports animate between observed coordinates over1.2seconds; there is no extrapolation beyond the latest position. Source positions retain their original timestamps. Browser polling stops when the layer is disabled.
 
 Files: `src/lib/live-buses.ts` (validation), `src/lib/bus-feed.ts` (upstream/cache), `src/components/BusLayer.ts` (shared-geometry3D models), and `/api/buses`. Parser tests cover coordinates, duplicate vehicle assignments, bearings, stale/expired/future timestamps and malformed rows. This is live feed visualization; bus-arrival and passenger-boarding analytics have not been added.
+
+Camera areas: select a camera → **Draw detection zones**. Choose crosswalk,
+vehicle crowding or people crowding; use four perimeter corners or two opposite
+corners for a box, enter a threshold, add the area, then save. The full camera
+frame is held while drawing. Region counts ignore retained/unconfirmed tracks;
+delayed frames show unknown counts. The reserved `crossing` zone also updates
+the node's actual crossing boundary through the publisher. Saves preserve existing
+signal/stream settings, and worker acknowledgement is displayed separately.
+Traffic-signal strip ownership can be released in Camera settings for crossing LEDs.
+
+ESP32 local worker: cloned sibling `../swarmflow-esp32`, with Apple MPS support.
+See its `MAC-INTEGRATION.md`. The existing camera gateway is `10.42.0.1:9010`;
+the relay preserves source timestamps. One local publisher reads `127.0.0.1:9010`.
+Reconnect it with `npm run connect:peer -- esp32cam-1 127.0.0.1` only if another
+publisher for the same node is not already running. The UNO Q remains connected
+through `npm run connect:usb`, using its on-board publisher (TASK-057).

@@ -326,3 +326,30 @@ The local Next server was restarted for these changes; the ingest hub/bridge and
 ## Update: optional live BusTO 3D vehicles
 
 Live buses toggle now reads `/api/buses` backed by BusTO's public `/api/paths`. The web server caches/coalesces fetches; camera/board services are not changed. `BusLayer.ts` renders reusable bus-body/windows/wheel meshes and animates between real GPS updates. Blue/grey transit markers have route labels and timestamp popups, independent of camera counts.90s stale and180s expiry gates preserve honest age. The feed includes transit vehicles potentially running tram routes; dimensions are illustrative. Find buses on map uses the nearest reporting vehicle; no guessed positions are persisted. See README for file paths/configuration.
+
+## 2026-10-11 merge and ESP worker integration
+
+Pulled origin/main through ece583c and merged with local Turin stops/live 3D buses.
+Local preservation commit 59e4b39; merge d1d717a. No push was requested.
+RegionEditor replaces the old zone modal: held full image, four corners or box,
+geometry validation, undo/remove, explicit thresholds and zone-aware rules.
+Publisher accepts both `{ok:true}` and the ESP worker's exact versioned config
+response; failed/partial saves do not get a success acknowledgement. `crossing`
+is mirrored into `/api/config` zone without enabling LEDs or resetting calibration.
+Authenticated reported config seeds missing server config, never overwrites operator edits.
+
+UNO Q ADB serial3409224453, current Wi-Fi10.42.0.102. USB reverse18080→3000,
+forward18765→8091 and19011→9011. Deployed publisher in
+/home/arduino/swarm/shared/TASK-057; enabled user service preserves TASK-048 outbox.
+Only telemetry publisher restarted. No firmware flash/camera restart/network change.
+
+ESP32 worker cloned at /Users/alpme/Projects/hackathons/swarmflow-esp32.
+Local MPS worker9010, frame relay from10.42.0.1:9010, publisher from127.0.0.1:9010.
+Read sibling MAC-INTEGRATION.md and run-mac.sh for restart. The hotspot gateway
+must remain on. Do not concurrently launch a second ESP publisher. Runtime and
+credentials are ignored. Recent actual inference28–47ms; incoming camera cadence
+is variable (~0.3–1.2fps in observed windows), not an inference bottleneck.
+
+Browser box drawing/add/cancel verified without leaving test geometry on real cameras.
+Unchanged config round-trips passed for UNO and ESP peer; configuration ack means
+peer acceptance, while ESP hardware applies streaming config on its next gateway poll.

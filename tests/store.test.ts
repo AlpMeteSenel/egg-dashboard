@@ -26,4 +26,13 @@ test('camera settings persist, validate and queue as one node command',()=>{
   assert.equal((s.cfg.led as {rules:unknown[]}).rules.length,1);
   assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,fallback:'purple'}}}));
   assert.throws(()=>saveNodeConfig('egg',{cfg:{...base,signal:{...base.signal,cycle:{...base.signal.cycle,green_s:700}}}}));});
+test('authenticated peer settings seed only missing config and cannot overwrite operator choices',()=>{
+ const cfg=nodeConfig('egg').cfg!;
+ ingest({...sample('peer-seed',Date.now()/1000,0),node_id:'esp-test',reported_cfg:cfg});
+ assert.deepEqual(nodeConfig('esp-test').cfg,cfg);
+ ingest({...sample('peer-newer',Date.now()/1000,0),node_id:'esp-test',reported_cfg:{...cfg,fps:4}});
+ assert.deepEqual(nodeConfig('esp-test').cfg,cfg);
+ ingest({...sample('peer-bad',Date.now()/1000,0),node_id:'invalid-peer',reported_cfg:{...cfg,fps:200}});
+ assert.equal(nodeConfig('invalid-peer').cfg,null);
+});
  test.after(()=>{rmSync(dir,{recursive:true,force:true});});

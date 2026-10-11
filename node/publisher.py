@@ -8,7 +8,7 @@ def packet_from_state(state,node_id):
  captured=camera.get('capture_ts') or time.time();source=camera.get('source_kind','unavailable')
  sample_id=str(camera.get('stream_id','none'))+':'+str(camera.get('frame_id',0))+':'+str(captured)
  bus=vision.get('bus_stop') or {}
- packet={'node_id':node_id,'sample_id':sample_id,'capture_ts':captured,'source_kind':source,'mcu_ok':bool(state.get('mcu_ok')),'fps':camera.get('fps',0),'inference_ms':camera.get('inference_ms',0),'frame_age_ms':vision.get('frame_age_ms') or 0,'sensors':state.get('sensors') or {},'vision':{key:vision.get(key) for key in ('camera_mode','auto_led','occupied','crossing_status','tracks','counts','directions','events','profile','command_latency_ms','led_command','traffic','cfg','cfg_hash','traffic_lights','countdown')}}
+ packet={'node_id':node_id,'sample_id':sample_id,'capture_ts':captured,'source_kind':source,'mcu_ok':bool(state.get('mcu_ok')),'fps':camera.get('fps',0),'inference_ms':camera.get('inference_ms',0),'frame_age_ms':vision.get('frame_age_ms') or 0,'sensors':state.get('sensors') or {},'vision':{key:vision.get(key) for key in ('camera_mode','supported_modes','auto_led','occupied','crossing_status','tracks','counts','directions','events','profile','command_latency_ms','led_command','traffic','cfg','cfg_hash','traffic_lights','countdown')}}
  packet['vision']['bus_stop']={key:bus.get(key) for key in ('count','threshold','threshold_reached','status','warnings')}
  return packet,camera.get('frame') if source=='live' else None
 
@@ -52,8 +52,17 @@ def request(url,data=None,token=None,timeout=8):
  req=urllib.request.Request(url,data=json.dumps(data).encode() if data is not None else None,headers=headers)
  with urllib.request.urlopen(req,timeout=timeout) as response:return json.load(response)
 
+def apply_settings(config,settings):
+ result=request(config.get('cfg_endpoint',config['local_config']) if set(settings)=={'cfg'} else config['local_config'],settings)
+ # The ESP worker cfg endpoint returns a versioned document rather than {ok:true}.
+ ok=result.get('ok') is True or (set(settings)=={'cfg'} and result.get('cfg')==settings['cfg'] and isinstance(result.get('v'),int) and isinstance(result.get('hash'),str) and not result.get('error'))
+ if ok and 'cfg' in settings and config.get('sync_crossing_zone'):
+  crossing=next((z['polygon'] for z in settings['cfg'].get('zones',[]) if z.get('id')=='crossing'),None)
+  result=request(config['local_config'],{'zone':crossing});ok=result.get('ok') is True
+ return ok
+
 def run(config):
- root=Path(__file__).resolve().parent;outbox=Outbox(root/'outbox.sqlite');last_status=0;last_good=None;last_error=None
+ root=Path(config.get('outbox_dir') or Path(__file__).resolve().parent);root.mkdir(parents=True,exist_ok=True);outbox=Outbox(root/'outbox.sqlite');last_status=0;last_good=None;last_error=None;reported_cfg=None;last_cfg_read=0
  print('SWARMFLOW publisher running; telemetry only, no inference or camera changes.',flush=True)
  while True:
   started=time.monotonic();current=None;preview=None
@@ -61,7 +70,11 @@ def run(config):
    current,preview=packet_from_state(request(config['local_state']),config['node_id']);outbox.put(current);preview=compact_preview(preview)
    # Publish the current view first; historical samples drain in chronological order.
    # The server keeps visual freshness separate from archived counter progress.
+   if config.get('cfg_endpoint') and time.monotonic()-last_cfg_read>15:
+    try:reported_cfg=request(config['cfg_endpoint']).get('cfg');last_cfg_read=time.monotonic()
+    except Exception:pass
    live=dict(current,live_only=True,pending_samples=outbox.count(),control_results=outbox.results())
+   if reported_cfg:live['reported_cfg']=reported_cfg
    if preview:live['preview']=preview
    answer=request(config['endpoint'],live,config['token'])
    if answer.get('ok') is not True:raise RuntimeError('Server did not acknowledge current telemetry')
@@ -69,7 +82,9 @@ def run(config):
    for command in answer.get('commands',[]):
     command_id=command.get('id');settings=command.get('config') or {}
     if not command_id or not settings or any(k not in ('camera_mode','auto_led','cfg') for k in settings):continue
-    try:result=request(config.get('cfg_endpoint',config['local_config']) if set(settings)=={'cfg'} else config['local_config'],settings);ok=result.get('ok') is True;outbox.done(command_id,{'id':command_id,'ok':ok,'error':None if ok else 'Node rejected setting'})
+    try:
+     ok=apply_settings(config,settings)
+     outbox.done(command_id,{'id':command_id,'ok':ok,'error':None if ok else 'Node rejected setting'})
     except Exception as e:outbox.done(command_id,{'id':command_id,'ok':False,'error':str(e)[:160]})
    pending=outbox.pending()
    if pending:
