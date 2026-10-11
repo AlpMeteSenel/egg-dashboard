@@ -3,7 +3,7 @@ import {useEffect,useState} from 'react';
 import {Check,ChevronDown,Plus,Settings2,X} from 'lucide-react';
 import type {NodeRecord} from '@/lib/types';
 type Preset={mode:number;brightness:number;for_s:number};
-type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s:number;off_s:number;priority:number;raw:string|null};
+type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s:number;off_s:number;priority:number;raw:string|null;zone?:string};
 type Cycle={enabled:boolean;green_s:number;yellow_s:number;red_s:number;extend_max_s:number;shorten_red:boolean};
 type Inter={enabled:boolean;green_s:number;other_green_s:number;yellow_s:number;allred_s:number;extend_max_s:number;lights:number};
 type SignalDoc={fallback:string;strip:boolean;cooldown_s:number;cycle:Cycle;rules:RuleDraft[];inter?:Inter};
@@ -17,17 +17,17 @@ const METRICS:{id:string;label:string;kind:'always'|'bool'|'num';value:number}[]
  {id:'veh_count',label:'Vehicles in view',kind:'num',value:3},
  {id:'time_night',label:'It is nighttime',kind:'bool',value:1},
  {id:'fps',label:'Camera frame rate',kind:'num',value:1},
- {id:'rssi',label:'Wi-Fi signal strength',kind:'num',value:-70}];
+ {id:'rssi',label:'Wi-Fi signal strength',kind:'num',value:-70},{id:'zone_veh',label:'Vehicles in a zone',kind:'num',value:2},{id:'zone_ped',label:'People in a zone',kind:'num',value:1},];
 const OPS=['>','>=','<','<=','=='];
 const COLORS=['red','yellow','green'];
-const whenFrom=(r:RuleDraft)=>{const m=METRICS.find(x=>x.id===r.metric);if(m?.kind==='always')return 'true';if(m?.kind==='bool')return r.metric+' == '+(r.value?1:0);return (r.metric==='zone_occ'?"zone('crossing').occupancy":r.metric)+' '+r.op+' '+r.value;};
+const whenFrom=(r:RuleDraft)=>{const m=METRICS.find(x=>x.id===r.metric);if(m?.kind==='always')return 'true';if(m?.kind==='bool')return r.metric+' == '+(r.value?1:0);if(r.metric==='zone_occ')return `zone('${r.zone||'crossing'}').occupancy ${r.op} ${r.value}`;if(r.metric==='zone_veh')return `zone('${r.zone||'cars'}').veh ${r.op} ${r.value}`;if(r.metric==='zone_ped')return `zone('${r.zone||'pedestrians'}').ped ${r.op} ${r.value}`;return r.metric+' '+r.op+' '+r.value;};
 function ruleFrom(when:string,led:string,name:string,rest:{on_s:number;off_s:number;priority:number}):RuleDraft{
  const base={name,led,on_s:rest.on_s,off_s:rest.off_s,priority:rest.priority,raw:null as string|null};
  if(when.trim()==='true')return {...base,metric:'true',op:'',value:0};
  let m=/^(\w+) == ([01])$/.exec(when.trim());
  if(m&&['crossing_active','time_night','stale'].includes(m[1]))return {...base,metric:m[1],op:'==',value:Number(m[2])};
- m=/^zone\('crossing'\)\.occupancy ([<>=]+) ([\d.-]+)$/.exec(when.trim());
- if(m)return {...base,metric:'zone_occ',op:m[1],value:Number(m[2])};
+ m=/^zone\('([^']+)'\)\.(occupancy|veh|ped) ([<>=]+) ([\d.-]+)$/.exec(when.trim());
+ if(m)return {...base,metric:m[2]==='occupancy'?'zone_occ':m[2]==='veh'?'zone_veh':'zone_ped',zone:m[1],op:m[3],value:Number(m[4])};
  m=/^(\w+) ([<>=]+) ([\d.-]+)$/.exec(when.trim());
  if(m&&METRICS.some(x=>x.id===m![1]&&x.kind==='num'))return {...base,metric:m[1],op:m[2],value:Number(m[3])};
  return {...base,raw:when,metric:'true',op:'',value:0};}
@@ -60,6 +60,8 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
   catch(e){onError(e instanceof Error?e.message:'Could not save camera settings');}finally{setBusy(false);}};
  const summary=cfg?'stream '+(cfg.fps?cfg.fps+' fps':'as fast as possible')+' · '+cfg.size.toUpperCase()+' · '+cfg.led.rules.length+' strip rules':'stream + lighting rules';
  const phase=phaseOf(node);
+ const zoneNames=[...new Set([ ...(((cfg?.zones||[]) as {id:string}[]).map(z=>z.id)),'crossing','cars','pedestrians'])];
+ const zonePick=(r:RuleDraft,set:(p:Partial<RuleDraft>)=>void)=>(['zone_occ','zone_veh','zone_ped'].includes(r.metric)&&<select aria-label="Detection zone" value={r.zone||''} onChange={e=>set({zone:e.target.value})}>{zoneNames.map(z=><option key={z} value={z}>{z}</option>)}</select>);
  return <div className="camera-settings">
   <button className="settings-toggle" onClick={openPanel} aria-expanded={open}><Settings2 size={16}/><span><strong>Camera settings</strong><small>{summary}</small></span><ChevronDown size={16}/></button>
   {open&&cfg&&<div className="settings-body">
@@ -82,7 +84,8 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    {cfg.led.rules.map((r,i)=>{const m=METRICS.find(x=>x.id===(r.raw?'':r.metric));return <div className="cfg-row cfg-rule" key={i}>
     {r.raw?<code className="cfg-raw">{r.raw}</code>:<>
      <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setRule(i,{metric:nm.id,op:nm.kind==='num'?'':'',value:nm.value});}}>{METRICS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
-     {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
+     {zonePick(r,set=>setRule(i,set))}
+      {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
      {m?.kind==='num'&&<input className="cfg-val" type="number" aria-label="Value" value={r.value} onChange={e=>setRule(i,{value:Number(e.target.value)})}/>}
      {m?.kind==='bool'&&<select aria-label="State" value={r.value} onChange={e=>setRule(i,{value:Number(e.target.value)})}><option value={1}>yes</option><option value={0}>no</option></select>}
      <span className="cfg-arrow">→</span>
@@ -116,7 +119,8 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    {cfg.signal.rules.map((r,i)=>{const m=METRICS.find(x=>x.id===(r.raw?'':r.metric));return <div className="cfg-row cfg-rule" key={i}>
     {r.raw?<code className="cfg-raw">{r.raw}</code>:<>
      <select aria-label="Condition" value={r.metric} onChange={e=>{const nm=METRICS.find(x=>x.id===e.target.value)!;setSigRule(i,{metric:nm.id,op:nm.kind==='num'?'':'',value:nm.value});}}>{METRICS.filter(x=>x.kind!=='always').map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
-     {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setSigRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
+     {zonePick(r,set=>setSigRule(i,set))}
+      {m?.kind==='num'&&<select aria-label="Comparison" value={r.op} onChange={e=>setSigRule(i,{op:e.target.value})}>{OPS.map(o=><option key={o} value={o}>{o}</option>)}</select>}
      {m?.kind==='num'&&<input className="cfg-val" type="number" aria-label="Value" value={r.value} onChange={e=>setSigRule(i,{value:Number(e.target.value)})}/>}
      {m?.kind==='bool'&&<select aria-label="State" value={r.value} onChange={e=>setSigRule(i,{value:Number(e.target.value)})}><option value={1}>yes</option><option value={0}>no</option></select>}
      <span className="cfg-arrow">→</span>
