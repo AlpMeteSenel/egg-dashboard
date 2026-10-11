@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';import dynamic from 'next/dynamic';
 import {Activity,ArrowDownToLine,ArrowRight,ArrowUpRight,Bell,Box,Bus,Camera,Check,ChevronDown,ChevronRight,Clock,Footprints,Hexagon,LayoutDashboard,Lightbulb,MapPin,Navigation,Radio,Settings2,ShieldCheck,Users,Wifi,X,Car,Link2,RotateCcw,AlertTriangle,LocateFixed,Eye} from 'lucide-react';
-import type {Overview,NodeRecord,Point,GroundPair,Track} from '@/lib/types';import type {MapMode} from './CityMap';
+import type {Overview,NodeRecord,Point,GroundPair,Track} from '@/lib/types';import type {MapMode} from './CityMap';import CameraSettings from './CameraSettings';
 const CityMap=dynamic(()=>import('./CityMap'),{ssr:false,loading:()=> <div className="map-loading"><Radio className="spin" size={26}/><span>Opening Torino…</span></div>});
 const time=(n:number)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Rome',hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(n);
 const empty:Overview={nodes:[],events:[],history:[],server_time:0};
@@ -47,6 +47,7 @@ export default function Dashboard(){
    {lastCommand&&<div className={'command-status '+(lastCommand.status==='failed'?'error':'')}>{lastCommand.status==='pending'?'Applying camera settings…':lastCommand.status==='applied'?'Camera confirmed the last change':lastCommand.error||lastCommand.status}</div>}
   </div>
   <div className="map-readiness"><div><MapPin size={17}/><strong>{!node?.placement?'Camera not placed':node.placement.pairs.length===4?'Street calibration saved':'Calibrate the street'}</strong></div><p>{!node?.placement?'Start by placing this camera in Torino.':node.placement.pairs.length===4?'Fresh cars and people use this ground-plane estimate. Amber positions extend beyond the matched pavement.':measuredCorners(node)?'This camera already measured a pavement patch. Click its four corners on the map once to place cars and people.':'A camera pin alone cannot locate a detection. Match four ground landmarks to estimate street positions.'}</p><button className="secondary full" disabled={!!node?.placement&&!node.fresh} onClick={node?.placement?startAlignment:startPlacement}>{node?.placement?<><LocateFixed size={16}/>{node.placement.pairs.length?'Recalibrate ground':measuredCorners(node)?'Calibrate on the map':'Align ground landmarks'}</>:<><MapPin size={16}/>Place this camera</>}</button>{node?.placement&&<button className="quiet full" onClick={startPlacement}>Edit camera location</button>}</div>
+   <CameraSettings node={node} onNotice={setNotice} onError={setError}/>
   </>}
  </section>;
  return <div className="app-shell"><aside className="sidebar"><a href="/" className="brand" aria-label="Swarmflow home"><Hexagon size={29}/><span>S</span></a><div className="sidebar-nav">{[{id:'overview',icon:LayoutDashboard,label:'Overview'},{id:'events',icon:Bell,label:'Events'},{id:'insights',icon:Activity,label:'Insights'}].map(i=><button key={i.id} title={i.label} aria-label={i.label} className={view===i.id?'active':''} onClick={()=>setView(i.id)}><i.icon size={21}/><span>{i.label}</span>{i.id==='events'&&warnings>0&&<b/>}</button>)}</div><div className="sidebar-bottom"><button aria-label="Connect a node" title="Connect a node" onClick={()=>setConnect(true)}><Link2 size={21}/></button><span className="avatar">HT</span></div></aside>

@@ -12,6 +12,7 @@ function db(){if(globals.swarmDb&&globals.swarmSchema===2)return globals.swarmDb
  CREATE TABLE IF NOT EXISTS history(node_id TEXT,bucket INTEGER,people INTEGER,vehicles INTEGER,fps REAL,occupied INTEGER,PRIMARY KEY(node_id,bucket));
  CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,node_id TEXT,kind TEXT,message TEXT,at REAL,severity TEXT,data TEXT);
  CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY,node_id TEXT,config TEXT,status TEXT,error TEXT,created_at REAL);
+ CREATE TABLE IF NOT EXISTS node_config(node_id TEXT PRIMARY KEY,cfg TEXT,updated REAL);
  CREATE INDEX IF NOT EXISTS event_time ON events(at);
  INSERT OR IGNORE INTO nodes(id,name) VALUES('egg','Egg · Camera 01');`);if(!d.prepare('PRAGMA table_info(nodes)').all().some(c=>c.name==='last_counter_capture')){d.exec('ALTER TABLE nodes ADD COLUMN last_counter_capture REAL DEFAULT 0; UPDATE nodes SET last_counter_capture=last_capture');}globals.swarmDb=d;globals.swarmSchema=2;return d;}
 const obj=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
@@ -82,6 +83,27 @@ export function validatePlacement(value:unknown):Placement|null{
 }
 export function updateNode(id:string,input:unknown){if(!safeID(id))throw Error('Invalid node ID.');const p=obj(input),name=typeof p.name==='string'?p.name.trim().slice(0,60):null;if(!name)throw Error('Give the camera a name.');const placement=validatePlacement(p.placement);db().prepare('UPDATE nodes SET name=?,placement=? WHERE id=?').run(name,placement?JSON.stringify(placement):null,id);return overview();}
 export function controlNode(id:string,input:unknown){const p=obj(input),config:Record<string,unknown>={};if(p.camera_mode!==undefined){if(p.camera_mode!=='crosswalk'&&p.camera_mode!=='bus_stop')throw Error('Unknown camera mode.');config.camera_mode=p.camera_mode as Mode;}if(p.auto_led!==undefined){if(typeof p.auto_led!=='boolean')throw Error('Automatic lights needs true or false.');config.auto_led=p.auto_led;}if(!Object.keys(config).length)throw Error('Choose a mode or light setting.');if(!db().prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');const commandID=randomUUID();db().prepare('INSERT INTO commands VALUES(?,?,?,?,?,?)').run(commandID,id,JSON.stringify(config),'pending',null,Date.now());return {ok:true,command_id:commandID};}
+export function nodeConfig(id:string){if(!safeID(id))throw Error('Invalid node ID.');const r=db().prepare('SELECT cfg FROM node_config WHERE node_id=?').get(id);return {cfg:r?parse<Record<string,unknown>|null>(r.cfg,null):null};}
+export function saveNodeConfig(id:string,input:unknown){
+ if(!safeID(id))throw Error('Invalid node ID.');
+ const cfg=obj(obj(input).cfg);
+ if(!Number.isInteger(cfg.fps)||Number(cfg.fps)<0||Number(cfg.fps)>15)throw Error('Frame rate must be a whole number from 0 to 15.');
+ if(!Number.isInteger(cfg.quality)||Number(cfg.quality)<5||Number(cfg.quality)>95)throw Error('JPEG quality must be between 5 and 95.');
+ if(cfg.size!=='vga'&&cfg.size!=='qvga')throw Error('Choose VGA or QVGA resolution.');
+ const led=obj(cfg.led),presets=obj(led.presets),names=Object.keys(presets);
+ if(!names.length||names.length>8)throw Error('Define between one and eight light presets.');
+ for(const n of names){const pr=obj(presets[n]);if(!Number.isInteger(pr.mode)||Number(pr.mode)<0||Number(pr.mode)>21)throw Error('Preset '+n+' needs a light effect from 0 to 21.');if(!Number.isFinite(pr.brightness)||Number(pr.brightness)<0||Number(pr.brightness)>100)throw Error('Preset '+n+' brightness must be between 0 and 100.');if(!Number.isFinite(pr.for_s)||Number(pr.for_s)<0||Number(pr.for_s)>600)throw Error('Preset '+n+' minimum time must be 0 to 600 seconds.');}
+ if(typeof led.fallback!=='string'||!presets[led.fallback])throw Error('Choose the preset shown when nothing is triggered.');
+ const rules=Array.isArray(led.rules)?led.rules:[];
+ if(!rules.length||rules.length>12)throw Error('Add between one and twelve lighting rules.');
+ const clean=(v:unknown,min:number,max:number,def=0)=>Number.isFinite(v)?Math.max(min,Math.min(Number(v),max)):def;
+ const cleanRules=rules.map((raw,i)=>{const r=obj(raw),when=typeof r.when==='string'?r.when.trim():'';if(!when||when.length>120||/(__|\bimport\b|\blambda\b|;)/.test(when)||!/^[\w\s().,'><=!&|:-]+$/.test(when))throw Error('Rule '+(i+1)+' has an unsafe condition.');if(typeof r.led!=='string'||!presets[r.led])throw Error('Rule '+(i+1)+' needs a known preset.');return {name:(typeof r.name==='string'&&r.name.trim()?r.name:'rule '+(i+1)).slice(0,40),when:when.replace(/\bAND\b/g,'and').replace(/\bOR\b/g,'or'),led:r.led,on_s:clean(r.on_s,0,300),off_s:clean(r.off_s,0,300),priority:clean(r.priority,-10,20,0)};});
+ const cleanCfg={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:Array.isArray(cfg.zones)?cfg.zones.slice(0,8):[],led:{presets,fallback:led.fallback,cooldown_s:clean(led.cooldown_s,0,300,10),rules:cleanRules}};
+ const d=db();if(!d.prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown node.');
+ d.prepare('INSERT OR REPLACE INTO node_config VALUES(?,?,?)').run(id,JSON.stringify(cleanCfg),Date.now());
+ const commandID=randomUUID();d.prepare('INSERT INTO commands VALUES(?,?,?,?,?,?)').run(commandID,id,JSON.stringify({cfg:cleanCfg}),'pending',null,Date.now());
+ return {ok:true,command_id:commandID,cfg:cleanCfg};
+}
 export function overview():Overview{
  const d=db(),now=Date.now();const nodes=d.prepare('SELECT * FROM nodes ORDER BY id').all().map(r=>{const t=parse<Telemetry|null>(r.telemetry,null),placement=parse<Placement|null>(r.placement,null),online=typeof r.last_seen==='number'&&now-r.last_seen<8000,fresh=online&&!!t&&t.source_kind==='live'&&now-t.capture_ts*1000>=-250&&now-t.capture_ts*1000<2500;let mapped:NodeRecord['mapped']=[],error:string|undefined;
  try{if(fresh&&t)mapped=mapTracks(t.vision.tracks,placement);}catch(e){error=e instanceof Error?e.message:'Ground alignment unavailable';}
