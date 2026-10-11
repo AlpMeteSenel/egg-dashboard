@@ -119,3 +119,16 @@ ESP32-CAM is capture-only and has no traffic-light marker or placement controls.
 icons. Opposite-pair phases and countdowns use UNO telemetry; stale data turns
 lenses dark. **Locate traffic lights** focuses the intersection. Pole locations
 are approximate visualization positions derived from street centerlines.
+
+Intersection activity risk is a prototype 0–100 heuristic from confirmed current
+people/vehicle counts, co-presence, occupied crossing and available estimated
+speed above30km/h. It holds brief detection gaps for about2s, never sums changing
+track IDs, and shows unknown for stale data. Dashed links and moving dots are
+explicitly illustrative module/controller connections; pulses stop for offline
+endpoints. **View connected modules** fits cameras plus the intersection.
+
+UNO adaptive demand now runs swarmflow-adaptive-intersection.service from TASK-058.
+Confirmed fresh counts use a2s peak hold; unconfirmed/retained tracks and cumulative
+passage counters cannot request green. Pedestrian priority uses a drawn crossing
+when available, otherwise full-view presence. The two-car rule uses full-view
+vehicle count until a vehicle zone is configured. Yellow/all-red timings retained.

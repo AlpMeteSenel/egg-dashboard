@@ -370,3 +370,27 @@ explicit placements and a signal controller; stale telemetry clears lit phases.
 Countdown badges retain per-light UNO phases, while **Locate traffic lights**
 fits the intersection. Signals1+3 and2+4 follow opposite road pairs.
 Browser confirmed four UNO markers, phase changes, and no console errors.
+
+## Stable demand, activity score and logical links
+
+TASK-058 adds StableDemand and a patched copy of the actual board uplink/engine,
+under /home/arduino/swarm/shared/TASK-058. Original swarmflow-uplink sources and
+cfg remain untouched; its user service is disabled to avoid duplicate MCU writers.
+Enabled own swarmflow-adaptive-intersection.service preserves the queue/intent
+paths and serves the same9011 config endpoint. Rollback: disable the adaptive unit
+and re-enable swarmflow-uplink.service. No firmware, capture, packages or network
+changes. Narrow MCU lease released after deployment.
+
+Fixed inactive zone('cars') reference when no cars zone exists, withveh_count>=2,
+2s arm/3s release. Added crossing_active==1 pedestrian priority20, immediate arm/3s
+release. Counts are current confirmed detections, not cumulative passage totals.
+2s peak hold tolerates unstable IDs/dropouts; stale/nonlive observations clear demands.
+A drawn crossing limits pedestrian demand; no crossing uses conservative full-view
+presence (explicit decision.json ped_scope). Existing Intersection timing/clearance
+engine unchanged. Four isolated checks passed locally and on board; live cfg command
+acknowledged with hash96505de1 at installation. No physical car/pedestrian field trial.
+
+Next IntersectionRisk:0–100 prototype activity heuristic, explained factors,
+short count hold, stale unknown. map logical dashed links between UNO/ESP pins and
+UNO/intersection centroid, animated only for online endpoints; labelled illustrative.
+Map toolbar View connected modules fits both locations. No actual mesh route claim.
