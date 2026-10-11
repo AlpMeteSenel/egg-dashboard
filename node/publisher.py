@@ -8,7 +8,7 @@ def packet_from_state(state,node_id):
  captured=camera.get('capture_ts') or time.time();source=camera.get('source_kind','unavailable')
  sample_id=str(camera.get('stream_id','none'))+':'+str(camera.get('frame_id',0))+':'+str(captured)
  bus=vision.get('bus_stop') or {}
- packet={'node_id':node_id,'sample_id':sample_id,'capture_ts':captured,'source_kind':source,'mcu_ok':bool(state.get('mcu_ok')),'fps':camera.get('fps',0),'inference_ms':camera.get('inference_ms',0),'frame_age_ms':vision.get('frame_age_ms') or 0,'sensors':state.get('sensors') or {},'vision':{key:vision.get(key) for key in ('camera_mode','auto_led','occupied','crossing_status','tracks','counts','directions','events','profile','command_latency_ms','led_command')}}
+ packet={'node_id':node_id,'sample_id':sample_id,'capture_ts':captured,'source_kind':source,'mcu_ok':bool(state.get('mcu_ok')),'fps':camera.get('fps',0),'inference_ms':camera.get('inference_ms',0),'frame_age_ms':vision.get('frame_age_ms') or 0,'sensors':state.get('sensors') or {},'vision':{key:vision.get(key) for key in ('camera_mode','auto_led','occupied','crossing_status','tracks','counts','directions','events','profile','command_latency_ms','led_command','traffic','cfg','cfg_hash','traffic_lights','countdown')}}
  packet['vision']['bus_stop']={key:bus.get(key) for key in ('count','threshold','threshold_reached','status','warnings')}
  return packet,camera.get('frame') if source=='live' else None
 
@@ -68,8 +68,8 @@ def run(config):
    outbox.acknowledged_results(live['control_results']);last_good=time.time();last_error=None
    for command in answer.get('commands',[]):
     command_id=command.get('id');settings=command.get('config') or {}
-    if not command_id or not settings or any(k not in ('camera_mode','auto_led') for k in settings):continue
-    try:result=request(config['local_config'],settings);ok=result.get('ok') is True;outbox.done(command_id,{'id':command_id,'ok':ok,'error':None if ok else 'Node rejected setting'})
+    if not command_id or not settings or any(k not in ('camera_mode','auto_led','cfg') for k in settings):continue
+    try:result=request(config.get('cfg_endpoint',config['local_config']) if set(settings)=={'cfg'} else config['local_config'],settings);ok=result.get('ok') is True;outbox.done(command_id,{'id':command_id,'ok':ok,'error':None if ok else 'Node rejected setting'})
     except Exception as e:outbox.done(command_id,{'id':command_id,'ok':False,'error':str(e)[:160]})
    pending=outbox.pending()
    if pending:
