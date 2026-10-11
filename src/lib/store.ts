@@ -75,6 +75,8 @@ export function ingest(input:unknown){
  if(liveOnly&&t.capture_ts>=(previous.last_capture as number||0)&&typeof p.preview==='string'&&p.preview.length<900000&&t.source_kind==='live'&&now-t.capture_ts*1000<60000){const image=Buffer.from(p.preview,'base64');if(image[0]===255&&image[1]===216)writeFileSync(join(dataRoot,'previews',id+'.jpg'),image);}
  d.prepare('UPDATE nodes SET last_seen=? WHERE id=?').run(now,id);
  d.prepare("UPDATE commands SET status='expired',error='Node did not acknowledge within 60 seconds' WHERE status='pending' AND created_at<?").run(now-60000);
+ // Sensor alerts remain available while motion standby pauses camera frames.
+ for(const e of t.vision.events){if(e.kind==='camera_tamper'&&finite(e.ts)&&typeof e.id==='string'&&e.ts*1000<=now+60000)d.prepare('INSERT OR IGNORE INTO events VALUES(?,?,?,?,?,?,?)').run(id+'-'+e.id.slice(0,160),id,'camera_tamper',typeof e.message==='string'?e.message.slice(0,240):'Camera moved or tilted',e.ts*1000,'warning',JSON.stringify(e));}
  const commands=d.prepare("SELECT id,config FROM commands WHERE node_id=? AND status='pending' ORDER BY created_at").all(id).map(c=>({id:c.id,config:parse(c.config,{})}));
  // Bounded development retention; keep aggregated passage totals on each node.
  if(Math.random()<.005){d.prepare('DELETE FROM receipts WHERE at<?').run(now-7*86400000);d.prepare('DELETE FROM history WHERE bucket<?').run(now-7*86400000);d.prepare('DELETE FROM stop_samples WHERE bucket<?').run(now-7*86400000);}
