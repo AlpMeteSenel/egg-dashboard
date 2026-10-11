@@ -45,7 +45,7 @@ export default function Dashboard(){
  const listEvents=data.events.filter(e=>eventFilter==='all'||(eventFilter==='warnings'?e.severity==='warning':e.kind==='count'));
  const nodeTracks=node?.fresh?v?.tracks.filter(t=>t.confirmed)||[]:[];
  const cameraPanel=<section className="camera-panel">
-  <div className="panel-title"><span><Camera size={17}/> {mapMode==='align'?'Match the ground':mapMode==='signals'?'Traffic lights':node?.name||'Camera 01'}</span><span className={'pill '+(node?.fresh?'live':'neutral')}><i/>{node?.fresh?'Live':node?.online?(v?.power_state==='standby'?'Motion standby':'Delayed frame'):'Connecting'}</span></div>
+  <div className="panel-title"><span><Camera size={17}/> {mapMode==='align'?'Match the ground':mapMode==='signals'?'Traffic lights':node?.name||'Camera 01'}</span><span className={'pill '+(node?.fresh?'live':'neutral')}><i/>{node?.fresh?'Live':node?.online?'Delayed frame':'Connecting'}</span></div>
   <div className={'camera-preview '+(mapMode==='align'&&!guide?'select-ground':'')} ref={preview} onClick={imageClick}>
    {frameSrc?<img src={mapMode==='align'?(heldFrame||frameSrc):frameSrc} alt="Live view from the selected camera" onError={e=>{e.currentTarget.style.opacity='.2';}} onLoad={e=>{e.currentTarget.style.opacity='1';}}/>:<div className="preview-empty"><Camera size={35}/><span>Waiting for the first camera frame</span></div>}
    {mapMode!=='align'&&Array.isArray(v?.profile?.zone)&&v?.camera_mode==='crosswalk'&&<svg className="camera-zone" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Saved crossing zone"><polygon points={(v.profile.zone as Point[]).map(p=>p.map(x=>x*100).join(',')).join(' ')} className={v.occupied?'occupied':''}/></svg>}
