@@ -4,16 +4,24 @@ import { join } from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type {NodeRecord,Telemetry,Placement,Overview,EventRecord,Track,Mode} from './types';
 import {align,mapTracks} from './geo';
+import {stopByID} from './stops';
+import type {StopAnalytics} from './types';
 const dataRoot=process.env.SWARMFLOW_DATA_DIR||join(process.cwd(),'.data');
 const globals=globalThis as unknown as {swarmDb?:DatabaseSync;swarmSchema?:number};
-function db(){if(globals.swarmDb&&globals.swarmSchema===2)return globals.swarmDb;mkdirSync(join(dataRoot,'previews'),{recursive:true});const d=globals.swarmDb||new DatabaseSync(join(dataRoot,'swarmflow.sqlite'));d.exec(`PRAGMA journal_mode=WAL;PRAGMA busy_timeout=3000;
+function db(){if(globals.swarmDb&&globals.swarmSchema===3)return globals.swarmDb;mkdirSync(join(dataRoot,'previews'),{recursive:true});const d=globals.swarmDb||new DatabaseSync(join(dataRoot,'swarmflow.sqlite'));d.exec(`PRAGMA journal_mode=WAL;PRAGMA busy_timeout=3000;
  CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,name TEXT NOT NULL,placement TEXT,telemetry TEXT,last_seen REAL,last_capture REAL DEFAULT 0,counters TEXT DEFAULT '{}',tallies TEXT DEFAULT '{}');
  CREATE TABLE IF NOT EXISTS receipts(node_id TEXT,sample_id TEXT,at REAL,PRIMARY KEY(node_id,sample_id));
  CREATE TABLE IF NOT EXISTS history(node_id TEXT,bucket INTEGER,people INTEGER,vehicles INTEGER,fps REAL,occupied INTEGER,PRIMARY KEY(node_id,bucket));
  CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,node_id TEXT,kind TEXT,message TEXT,at REAL,severity TEXT,data TEXT);
  CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY,node_id TEXT,config TEXT,status TEXT,error TEXT,created_at REAL);
  CREATE INDEX IF NOT EXISTS event_time ON events(at);
- INSERT OR IGNORE INTO nodes(id,name) VALUES('egg','Egg · Camera 01');`);if(!d.prepare('PRAGMA table_info(nodes)').all().some(c=>c.name==='last_counter_capture')){d.exec('ALTER TABLE nodes ADD COLUMN last_counter_capture REAL DEFAULT 0; UPDATE nodes SET last_counter_capture=last_capture');}globals.swarmDb=d;globals.swarmSchema=2;return d;}
+ INSERT OR IGNORE INTO nodes(id,name) VALUES('egg','Egg · Camera 01');`);if(!d.prepare('PRAGMA table_info(nodes)').all().some(c=>c.name==='last_counter_capture')){d.exec('ALTER TABLE nodes ADD COLUMN last_counter_capture REAL DEFAULT 0; UPDATE nodes SET last_counter_capture=last_capture');}if(!d.prepare('PRAGMA table_info(nodes)').all().some(c=>c.name==='stop_id'))d.exec('ALTER TABLE nodes ADD COLUMN stop_id TEXT');
+ d.exec(`CREATE TABLE IF NOT EXISTS stop_links(node_id TEXT,stop_id TEXT,from_at REAL,to_at REAL);
+ CREATE INDEX IF NOT EXISTS stop_link_time ON stop_links(node_id,from_at);
+ CREATE TABLE IF NOT EXISTS stop_samples(node_id TEXT,stop_id TEXT,bucket REAL,captured REAL,waiting INTEGER,threshold INTEGER,PRIMARY KEY(node_id,stop_id,bucket));
+ CREATE TABLE IF NOT EXISTS stop_warnings(id TEXT PRIMARY KEY,stop_id TEXT,at REAL);
+ CREATE INDEX IF NOT EXISTS stop_sample_time ON stop_samples(bucket);`);
+ globals.swarmDb=d;globals.swarmSchema=3;return d;}
 const obj=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const finite=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v);
 const safeID=(id:unknown):id is string=>typeof id==='string'&&/^[a-z0-9_-]{1,48}$/.test(id);
@@ -50,6 +58,7 @@ export function ingest(input:unknown){
    }
    if(t.source_kind==='live'){
     const valid=t.vision.tracks.filter(x=>x.confirmed&&!x.retained),people=valid.filter(x=>x.cls==='person').length,vehicles=valid.filter(x=>['car','bus','truck','motorcycle'].includes(x.cls)).length;
+    recordStopSample(d,id,t);
     d.prepare('INSERT OR REPLACE INTO history VALUES(?,?,?,?,?,?)').run(id,Math.floor(t.capture_ts/10)*10000,people,vehicles,t.fps,t.vision.occupied?1:0);
     for(const e of [...t.vision.events,...t.vision.bus_stop.warnings]){const at=finite(e.ts)?e.ts*1000:0;if(!at||typeof e.message!=='string')continue;const eventID=typeof e.id==='string'?id+'-'+e.id:id+'-'+at+'-'+e.message;d.prepare('INSERT OR IGNORE INTO events VALUES(?,?,?,?,?,?,?)').run(eventID,id,typeof e.kind==='string'?e.kind:'activity',e.message.slice(0,240),at,typeof e.severity==='string'?e.severity:'info',JSON.stringify(e));}
    }
@@ -62,7 +71,7 @@ export function ingest(input:unknown){
  d.prepare("UPDATE commands SET status='expired',error='Node did not acknowledge within 60 seconds' WHERE status='pending' AND created_at<?").run(now-60000);
  const commands=d.prepare("SELECT id,config FROM commands WHERE node_id=? AND status='pending' ORDER BY created_at").all(id).map(c=>({id:c.id,config:parse(c.config,{})}));
  // Bounded development retention; keep aggregated passage totals on each node.
- if(Math.random()<.005){d.prepare('DELETE FROM receipts WHERE at<?').run(now-7*86400000);d.prepare('DELETE FROM history WHERE bucket<?').run(now-7*86400000);}
+ if(Math.random()<.005){d.prepare('DELETE FROM receipts WHERE at<?').run(now-7*86400000);d.prepare('DELETE FROM history WHERE bucket<?').run(now-7*86400000);d.prepare('DELETE FROM stop_samples WHERE bucket<?').run(now-7*86400000);}
  return {ok:true,duplicate,commands};
 }
 export function ingestBatch(input:unknown){
@@ -85,8 +94,34 @@ export function controlNode(id:string,input:unknown){const p=obj(input),config:R
 export function overview():Overview{
  const d=db(),now=Date.now();const nodes=d.prepare('SELECT * FROM nodes ORDER BY id').all().map(r=>{const t=parse<Telemetry|null>(r.telemetry,null),placement=parse<Placement|null>(r.placement,null),online=typeof r.last_seen==='number'&&now-r.last_seen<8000,fresh=online&&!!t&&t.source_kind==='live'&&now-t.capture_ts*1000>=-250&&now-t.capture_ts*1000<2500;let mapped:NodeRecord['mapped']=[],error:string|undefined;
  try{if(fresh&&t)mapped=mapTracks(t.vision.tracks,placement);}catch(e){error=e instanceof Error?e.message:'Ground alignment unavailable';}
- return {id:r.id as string,name:r.name as string,placement,telemetry:t,last_seen:r.last_seen as number|null,online,fresh,tallies:parse<Record<string,number>>(r.tallies,{}),mapped,mapping_error:error,commands:d.prepare('SELECT id,config,status,error,created_at FROM commands WHERE node_id=? ORDER BY created_at DESC LIMIT 5').all(r.id as string).map(c=>({...c,config:parse(c.config,{})}))} as NodeRecord;});
+ return {stop_id:r.stop_id as string|null,id:r.id as string,name:r.name as string,placement,telemetry:t,last_seen:r.last_seen as number|null,online,fresh,tallies:parse<Record<string,number>>(r.tallies,{}),mapped,mapping_error:error,commands:d.prepare('SELECT id,config,status,error,created_at FROM commands WHERE node_id=? ORDER BY created_at DESC LIMIT 5').all(r.id as string).map(c=>({...c,config:parse(c.config,{})}))} as NodeRecord;});
  const events=d.prepare('SELECT * FROM events ORDER BY at DESC LIMIT 80').all().map(r=>({...r,data:parse(r.data,{})})) as unknown as EventRecord[];
  const history=d.prepare('SELECT bucket as at,node_id,people,vehicles,fps,occupied FROM history WHERE bucket>? ORDER BY bucket').all(now-86400000) as unknown as Overview['history'];return {nodes,events,history,server_time:now};
 }
 export function preview(id:string){if(!safeID(id))return null;const p=join(dataRoot,'previews',id+'.jpg');return existsSync(p)?readFileSync(p):null;}
+
+function linkAt(d:DatabaseSync,id:string,at:number){return d.prepare('SELECT stop_id FROM stop_links WHERE node_id=? AND from_at<=? AND (to_at IS NULL OR to_at>?) ORDER BY from_at DESC LIMIT 1').get(id,at,at)?.stop_id as string|undefined;}
+function validWaiting(t:Telemetry){return t.source_kind==='live'&&t.vision.camera_mode==='bus_stop'&&t.frame_age_ms<=1500&&t.vision.bus_stop.count!==null&&Number.isInteger(t.vision.bus_stop.count)&&t.vision.bus_stop.count>=0&&t.vision.bus_stop.threshold>0;}
+function recordStopSample(d:DatabaseSync,id:string,t:Telemetry){
+ const captured=t.capture_ts*1000,stop=linkAt(d,id,captured);
+ if(stop&&validWaiting(t))d.prepare(`INSERT INTO stop_samples VALUES(?,?,?,?,?,?) ON CONFLICT(node_id,stop_id,bucket) DO UPDATE SET captured=excluded.captured,waiting=excluded.waiting,threshold=excluded.threshold WHERE excluded.captured>stop_samples.captured`).run(id,stop,Math.floor(captured/10000)*10000,captured,t.vision.bus_stop.count!,t.vision.bus_stop.threshold);
+ for(const w of t.vision.bus_stop.warnings){if(!finite(w.ts)||typeof w.id!=='string')continue;const at=w.ts*1000,linked=linkAt(d,id,at);if(linked)d.prepare('INSERT OR IGNORE INTO stop_warnings VALUES(?,?,?)').run(id+'-'+w.id,linked,at);}
+}
+export function assignStop(id:string,stop:unknown){
+ if(!safeID(id)||!db().prepare('SELECT id FROM nodes WHERE id=?').get(id))throw Error('Unknown camera.');
+ if(stop!==null&&(typeof stop!=='string'||!stopByID(stop)))throw Error('Choose a stop from the Turin catalogue.');
+ const d=db(),now=Date.now(),old=d.prepare('SELECT stop_id FROM nodes WHERE id=?').get(id)!.stop_id;
+ if(old===stop)return overview();
+ d.exec('BEGIN IMMEDIATE');try{d.prepare('UPDATE stop_links SET to_at=? WHERE node_id=? AND to_at IS NULL').run(now,id);if(stop)d.prepare('INSERT INTO stop_links VALUES(?,?,?,NULL)').run(id,stop as string,now);d.prepare('UPDATE nodes SET stop_id=? WHERE id=?').run(stop as string|null,id);d.exec('COMMIT');}catch(e){d.exec('ROLLBACK');throw e;}
+ return overview();
+}
+export function transitAnalytics():StopAnalytics[]{
+ const d=db(),since=Date.now()-86400000,nodes=overview().nodes;
+ const ids=new Set([...nodes.map(n=>n.stop_id).filter((id):id is string=>!!id),...d.prepare('SELECT DISTINCT stop_id FROM stop_samples WHERE bucket>=?').all(since).map(r=>r.stop_id as string)]);
+ return [...ids].flatMap(id=>{const stop=stopByID(id);if(!stop)return [];
+ const linked=nodes.filter(n=>n.stop_id===id),live=linked.flatMap(n=>n.fresh&&n.telemetry&&validWaiting(n.telemetry)?[n.telemetry.vision.bus_stop.count!]:[]);
+ // Overlapping cameras are not independent passengers: take maxima per bucket, never sum people.
+ const rows=d.prepare('SELECT bucket,MAX(waiting) waiting,MAX(CASE WHEN waiting>=threshold THEN 1 ELSE 0 END) crowded FROM stop_samples WHERE stop_id=? AND bucket>=? GROUP BY bucket ORDER BY bucket').all(id,since);
+ const hours=new Map<number,{at:number;sum:number;peak:number;samples:number}>();for(const r of rows){const at=Math.floor(Number(r.bucket)/3600000)*3600000,h=hours.get(at)||{at,sum:0,peak:0,samples:0};h.sum+=Number(r.waiting);h.peak=Math.max(h.peak,Number(r.waiting));h.samples++;hours.set(at,h);}
+ return [{stop,nodes:linked.map(n=>({id:n.id,name:n.name,fresh:n.fresh})),live_waiting:live.length?Math.max(...live):null,samples:rows.length,average:rows.length?rows.reduce((s,r)=>s+Number(r.waiting),0)/rows.length:null,peak:rows.length?Math.max(...rows.map(r=>Number(r.waiting))):null,crowded_samples:rows.filter(r=>r.crowded===1).length,warnings:Number(d.prepare('SELECT COUNT(*) n FROM stop_warnings WHERE stop_id=? AND at>=?').get(id,since)!.n),hourly:[...hours.values()].map(h=>({at:h.at,average:h.sum/h.samples,peak:h.peak,samples:h.samples}))}];});
+}

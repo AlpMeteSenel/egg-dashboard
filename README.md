@@ -75,3 +75,23 @@ python3 -m unittest discover -s node -p 'test_*.py' -v
 ```
 
 Tests cover homography projection, degenerate registration, missing/stale map tracks, authenticated and duplicate ingestion, out-of-order samples, counter resets, persisted placements, live state while history drains, command acknowledgements and durable outbox/result recovery. The node crossing-persistence change passed49 isolated backend/vision regressions. Live tests verified publisher submissions and a crossing-light control round trip; physical strip appearance and surveyed position/speed accuracy require field observation.
+
+
+## Transit stops and camera assignments
+
+`data/turin-stops.json` contains 6,324 GTT BUS/TRAM stop points from BusTO's cached MaTO export, snapshot 22 May 2026. Public stop/route metadata only is copied; BusTO's private database, MQTT configuration and app are untouched. Reimport after refreshing BusTO's catalogue with `python3 scripts/import-busto-stops.py` (optional `--source` export folder). The snapshot date is shown in the transit view; it is not live service information.
+
+In Overview, toggle **Bus stops** to show map points. Click a point or search in **Camera’s transit stop** by name, code or route; confirm the exact side of the road with **Link camera to stop**. The link saves independently of position/calibration/mode. Enable bus-stop occupancy and configure its actual waiting-area boundary in local node controls before collecting counts. No real camera is assigned a guessed stop during development.
+
+The sidebar's **Bus stops** page shows fresh waiting-area occupancy, sampled averages/peaks, hourly peaks, threshold-exceeding samples and saved crowding warnings for the last24 hours. Stale frames, unknown counts, crosswalk mode and replay are excluded. Missing observations are unknown, not zero. Average is over observed10-second buckets, not individual waiting time, boarding totals or proof of demand for a specific line. Overlapping cameras use the maximum count per stop/bucket rather than summing passengers. No automatic GTT dispatch is implemented.
+
+Schema3 adds `nodes.stop_id`, effective-dated `stop_links`, `stop_samples` and deduplicated `stop_warnings`. Changing/unlinking a camera preserves old stop history; delayed packets use the assignment effective at capture time. Older data is not retroactively attributed to a new stop. New endpoints: `GET /api/stops`, `GET /api/stops/analytics`, same-origin `PATCH /api/nodes/[id]/stop` with `stop_id` or null. A runtime SQLite backup was made under ignored `.data/backups/` before migration. Four transit regressions cover link validation/calibration preservation, stale and unassigned packets, dedup/overlapping cameras and reassignment/backlog handling.
+
+
+## Optional live 3D transit vehicles
+
+The map’s **Live buses / Hide buses** button toggles independent BusTO GPS vehicles. **Find buses on map** zooms to a reporting vehicle nearest the current view. Blue bus-shaped models and route labels distinguish the transit feed from camera detections; click a marker to see line, destination, vehicle ID (if available) and GPS age. This source can include tram services; models are illustrative, not measured fleet geometry. Camera counters and stop occupancy are unaffected.
+
+`GET /api/buses` reads the public `https://app.bus.to.it/api/paths`, using server-side10-second caching, request coalescing, a12-second timeout and a5MB response bound. Only compact validated current positions are returned. Optional server env `BUSTO_API_URL` can target a different compatible deployment; no BusTO database/MQTT credentials are required or copied. Positions older than90seconds turn grey and disappear after180seconds. Failure shows feed unavailable and retains only bounded-age fixes. New GPS reports animate between observed coordinates over1.2seconds; there is no extrapolation beyond the latest position. Source positions retain their original timestamps. Browser polling stops when the layer is disabled.
+
+Files: `src/lib/live-buses.ts` (validation), `src/lib/bus-feed.ts` (upstream/cache), `src/components/BusLayer.ts` (shared-geometry3D models), and `/api/buses`. Parser tests cover coordinates, duplicate vehicle assignments, bearings, stale/expired/future timestamps and malformed rows. This is live feed visualization; bus-arrival and passenger-boarding analytics have not been added.

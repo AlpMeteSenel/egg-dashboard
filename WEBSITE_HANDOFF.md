@@ -312,3 +312,17 @@ Future multi-node true mesh, LTE gateways, emergency dispatch, city traffic-ligh
 ## Suggested first instruction for the next agent
 
 “Read this handoff and the existing project README/AGENTS.md. Continue SWARMFLOW in `/Users/alpme/Projects/hackathons/hackturin`. Reconnect egg if needed, inspect current board coordination before hardware changes, preserve credentials/data and other agents' work, and improve the existing city dashboard. Start by reporting the current live connection and map calibration state; do not rebuild the project from scratch.”
+
+
+## Update: BusTO transit-stop integration (11 October 2026)
+
+The website now includes `data/turin-stops.json` (6,324 GTT bus/tram stop points; May22 snapshot) and `scripts/import-busto-stops.py`. `src/lib/stops.ts` loads the public catalogue, and `src/components/Transit.tsx` supplies searchable camera assignments and the Bus stops analytics page. CityMap has a toggled point/label layer and selection popups. Stop metadata is static; no BusTO credentials or live vehicle subscription was copied.
+
+Schema3 in store.ts introduces effective-dated assignment history and observed occupancy/warning records. Link/unlink uses `/api/nodes/[id]/stop`; catalogue `/api/stops`; last24h analytics `/api/stops/analytics`. Samples begin after linking, require actual fresh-at-node bus-stop occupancy, and use maximum count across overlapping cameras. Link does not switch the node mode or redraw its waiting boundary. Preserve all existing camera calibrations. No real stop association was guessed for egg. Backend tests use isolated temporary databases.
+
+The local Next server was restarted for these changes; the ingest hub/bridge and Arduino services were left alone. See README's transit section for semantics and refresh instructions.
+
+
+## Update: optional live BusTO 3D vehicles
+
+Live buses toggle now reads `/api/buses` backed by BusTO's public `/api/paths`. The web server caches/coalesces fetches; camera/board services are not changed. `BusLayer.ts` renders reusable bus-body/windows/wheel meshes and animates between real GPS updates. Blue/grey transit markers have route labels and timestamp popups, independent of camera counts.90s stale and180s expiry gates preserve honest age. The feed includes transit vehicles potentially running tram routes; dimensions are illustrative. Find buses on map uses the nearest reporting vehicle; no guessed positions are persisted. See README for file paths/configuration.
