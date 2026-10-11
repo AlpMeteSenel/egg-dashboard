@@ -5,7 +5,8 @@ import type {NodeRecord} from '@/lib/types';
 type Preset={mode:number;brightness:number;for_s:number};
 type RuleDraft={name:string;metric:string;op:string;value:number;led:string;on_s:number;off_s:number;priority:number;raw:string|null};
 type Cycle={enabled:boolean;green_s:number;yellow_s:number;red_s:number;extend_max_s:number;shorten_red:boolean};
-type SignalDoc={fallback:string;strip:boolean;cooldown_s:number;cycle:Cycle;rules:RuleDraft[]};
+type Inter={enabled:boolean;green_s:number;other_green_s:number;yellow_s:number;allred_s:number;extend_max_s:number;lights:number};
+type SignalDoc={fallback:string;strip:boolean;cooldown_s:number;cycle:Cycle;rules:RuleDraft[];inter?:Inter};
 type CfgDoc={fps:number;quality:number;size:string;zones:unknown[];led:{presets:Record<string,Preset>;fallback:string;cooldown_s:number;rules:RuleDraft[]};signal:SignalDoc;signal_on:boolean};
 const MODES:[number,string][]=[[1,'Rainbow ambient'],[2,'Breathing'],[3,'Scanning light'],[6,'Lights off'],[7,'Solid red'],[8,'Solid green'],[9,'Solid blue'],[11,'Crossing warning'],[12,'Red alert sweep'],[13,'Hazard flash'],[14,'Siren'],[15,'Crossing wave'],[16,'Flow left'],[17,'Flow right'],[18,'Comet trail'],[19,'Theatre chase'],[20,'Heartbeat'],[21,'Bus-stop beacon']];
 const METRICS:{id:string;label:string;kind:'always'|'bool'|'num';value:number}[]=[
@@ -40,7 +41,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    if(d&&d.cfg){const c=d.cfg,led=c.led,sig=c.signal;
     setCfg({fps:c.fps,quality:c.quality,size:c.size,zones:c.zones||[],
      led:{presets:led.presets,fallback:led.fallback,cooldown_s:led.cooldown_s,rules:(led.rules||[]).map((r:RuleDraft&{when:string})=>ruleFrom(r.when,r.led,r.name,{on_s:r.on_s,off_s:r.off_s,priority:r.priority}))},
-     signal_on:!!sig,signal:sig?{fallback:sig.fallback,strip:!!sig.strip,cooldown_s:sig.cooldown_s,cycle:sig.cycle??{enabled:false,green_s:12,yellow_s:3,red_s:10,extend_max_s:15},rules:(sig.rules||[]).map((r:RuleDraft&{when:string})=>ruleFrom(r.when,r.led,r.name,{on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}:starterCfg().signal});}
+     signal_on:!!sig,signal:sig?{inter:sig.intersection,fallback:sig.fallback,strip:!!sig.strip,cooldown_s:sig.cooldown_s,cycle:sig.cycle??{enabled:false,green_s:12,yellow_s:3,red_s:10,extend_max_s:15},rules:(sig.rules||[]).map((r:RuleDraft&{when:string})=>ruleFrom(r.when,r.led,r.name,{on_s:r.on_s,off_s:r.off_s,priority:r.priority}))}:starterCfg().signal});}
    setLoaded(true);}).catch(()=>{if(!stop)setLoaded(true);});
   return()=>{stop=true;};},[node?.id]);
  if(!node)return null;
@@ -54,7 +55,7 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
  const setSigRule=(i:number,patch:Partial<RuleDraft>)=>setSig({rules:cfg!.signal.rules.map((r,j)=>j===i?{...r,...patch}:r)});
  const save=async()=>{if(!cfg)return;setBusy(true);setSent({prev:node?.telemetry?.vision?.cfg_hash});
   const rules=(list:RuleDraft[])=>list.map(r=>({name:r.name,when:r.raw??whenFrom(r),led:r.led,on_s:r.on_s,off_s:r.off_s,priority:r.priority}));
-  const payload={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:cfg.zones,...(cfg.signal_on?{signal:{fallback:cfg.signal.fallback,strip:cfg.signal.strip,cooldown_s:cfg.signal.cooldown_s,cycle:cfg.signal.cycle,rules:rules(cfg.signal.rules)}}:{}),led:{presets:cfg.led.presets,fallback:cfg.led.fallback,cooldown_s:cfg.led.cooldown_s,rules:rules(cfg.led.rules)}};
+  const payload={fps:cfg.fps,quality:cfg.quality,size:cfg.size,zones:cfg.zones,...(cfg.signal_on?{signal:{fallback:cfg.signal.fallback,strip:cfg.signal.strip,cooldown_s:cfg.signal.cooldown_s,cycle:cfg.signal.cycle,...(cfg.signal.inter?{intersection:cfg.signal.inter}:{}),rules:rules(cfg.signal.rules)}}:{}),led:{presets:cfg.led.presets,fallback:cfg.led.fallback,cooldown_s:cfg.led.cooldown_s,rules:rules(cfg.led.rules)}};
   try{const r=await fetch('/api/nodes/'+node.id+'/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cfg:payload})});const d=await r.json();if(!r.ok)throw Error(d.error);onNotice('Settings sent to '+node.name+'. The camera confirms within a minute.');}
   catch(e){onError(e instanceof Error?e.message:'Could not save camera settings');}finally{setBusy(false);}};
  const summary=cfg?'stream '+(cfg.fps?cfg.fps+' fps':'as fast as possible')+' · '+cfg.size.toUpperCase()+' · '+cfg.led.rules.length+' strip rules':'stream + lighting rules';
@@ -105,6 +106,8 @@ export default function CameraSettings({node,onNotice,onError}:{node?:NodeRecord
    {cfg.signal_on&&<>
     <label>Idle color<select aria-label="Idle signal color" value={cfg.signal.fallback} onChange={e=>setSig({fallback:e.target.value})}>{COLORS.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
     <label className="cfg-check"><input type="checkbox" checked={cfg.signal.cycle.enabled} onChange={e=>setSig({cycle:{...cfg.signal.cycle,enabled:e.target.checked}})}/>Timed cycle</label>
+    <label className="cfg-check"><input type="checkbox" checked={!!cfg.signal.inter?.enabled} onChange={e=>setSig({inter:e.target.checked?cfg.signal.inter??{enabled:true,green_s:12,other_green_s:290,yellow_s:3,allred_s:2,extend_max_s:10,lights:4}:{...(cfg.signal.inter as Inter),enabled:false}})}/>Cross intersection · opposite lights share green</label>
+    {cfg.signal.inter?.enabled&&<label className="cfg-mini">other road green s<input type="number" min={1} max={600} value={cfg.signal.inter.other_green_s} onChange={e=>setSig({inter:{...cfg.signal.inter!,other_green_s:Number(e.target.value)}})}/></label>}
     <label className="cfg-mini">green s<input type="number" min={1} max={600} value={cfg.signal.cycle.green_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,green_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">yellow s<input type="number" min={1} max={30} value={cfg.signal.cycle.yellow_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,yellow_s:Number(e.target.value)}})}/></label>
     <label className="cfg-mini">red s<input type="number" min={1} max={600} value={cfg.signal.cycle.red_s} onChange={e=>setSig({cycle:{...cfg.signal.cycle,red_s:Number(e.target.value)}})}/></label>
